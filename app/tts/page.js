@@ -22,7 +22,7 @@ const STYLE_PRESETS = [
   { id: "podcast", name: "Podcast Host", description: "Energetic", rate: 10, pitch: 5, icon: "🎧" },
 ];
 
-function splitTextIntoChunks(text, maxChars = 9000) {
+function splitTextIntoChunks(text, maxChars = 2000) {
   const chunks = [];
   let remaining = text.trim();
   
@@ -113,7 +113,7 @@ export default function MicrosoftTTSPage() {
           text: `In a world where legends are born from whispers... I am ${voice.name}, your storyteller.`,
           voice: voice.id,
           rate: `${actualRate >= 0 ? '+' : ''}${actualRate}%`,
-          pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`,
+          pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}%`,
         }),
         signal: previewAbortRef.current.signal,
       });
@@ -145,7 +145,7 @@ export default function MicrosoftTTSPage() {
     setProgress({ current: 0, total: 0, percent: 0 });
 
     try {
-      const chunks = splitTextIntoChunks(text.trim(), 10000);
+      const chunks = splitTextIntoChunks(text.trim());
       const totalChunks = chunks.length;
       const audioBlobs = [];
       setProgress({ current: 0, total: totalChunks, percent: 0 });
@@ -159,7 +159,7 @@ export default function MicrosoftTTSPage() {
             text: chunks[i],
             voice: selectedVoice?.id || "en-US-GuyNeural",
             rate: `${actualRate >= 0 ? '+' : ''}${actualRate}%`,
-            pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`,
+            pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}%`,
           }),
         });
         if (!response.ok) throw new Error((await response.json()).error || `Failed chunk ${i + 1}`);
