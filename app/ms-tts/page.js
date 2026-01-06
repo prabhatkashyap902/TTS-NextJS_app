@@ -22,25 +22,31 @@ const STYLE_PRESETS = [
   { id: "podcast", name: "Podcast Host", description: "Energetic", rate: 10, pitch: 5, icon: "🎧" },
 ];
 
-function splitTextIntoChunks(text, maxChars = 10000) {
+function splitTextIntoChunks(text, maxChars = 9000) {
   const chunks = [];
   let remaining = text.trim();
+  
   while (remaining.length > 0) {
-    if (remaining.length <= maxChars) { chunks.push(remaining); break; }
-    let breakPoint = -1;
-    const searchEnd = Math.min(remaining.length, maxChars);
-    for (let i = searchEnd; i > maxChars * 0.7; i--) {
-      if (['.', '!', '?', '\n'].includes(remaining[i])) { breakPoint = i + 1; break; }
+    if (remaining.length <= maxChars) {
+      chunks.push(remaining);
+      break;
     }
-    if (breakPoint === -1) {
-      for (let i = searchEnd; i > maxChars * 0.5; i--) {
-        if ([',', ';', ' '].includes(remaining[i])) { breakPoint = i + 1; break; }
+    
+    // Find position around maxChars
+    let breakPoint = maxChars;
+    
+    // If we're in the middle of a word, extend to end of word
+    if (remaining[breakPoint] !== ' ' && remaining[breakPoint] !== '\n') {
+      // Look forward to find end of current word
+      while (breakPoint < remaining.length && remaining[breakPoint] !== ' ' && remaining[breakPoint] !== '\n') {
+        breakPoint++;
       }
     }
-    if (breakPoint === -1) breakPoint = maxChars;
+    
     chunks.push(remaining.substring(0, breakPoint).trim());
     remaining = remaining.substring(breakPoint).trim();
   }
+  
   return chunks;
 }
 
