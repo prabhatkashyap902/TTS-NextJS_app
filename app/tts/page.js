@@ -32,12 +32,8 @@ function splitTextIntoChunks(text, maxChars = 2000) {
       break;
     }
     
-    // Find position around maxChars
     let breakPoint = maxChars;
-    
-    // If we're in the middle of a word, extend to end of word
     if (remaining[breakPoint] !== ' ' && remaining[breakPoint] !== '\n') {
-      // Look forward to find end of current word
       while (breakPoint < remaining.length && remaining[breakPoint] !== ' ' && remaining[breakPoint] !== '\n') {
         breakPoint++;
       }
@@ -48,6 +44,14 @@ function splitTextIntoChunks(text, maxChars = 2000) {
   }
   
   return chunks;
+}
+
+function formatTime(seconds) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hrs > 0) return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 export default function MicrosoftTTSPage() {
@@ -65,9 +69,11 @@ export default function MicrosoftTTSPage() {
   const [loadingVoice, setLoadingVoice] = useState(null);
   const [playingVoice, setPlayingVoice] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
+  const [elapsedTime, setElapsedTime] = useState(0);
   const audioRef = useRef(null);
   const abortRef = useRef(false);
   const previewAbortRef = useRef(null);
+  const timerRef = useRef(null);
 
   const wordCount = text.trim() ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
   const charCount = text.trim().length;
@@ -113,7 +119,7 @@ export default function MicrosoftTTSPage() {
           text: `In a world where legends are born from whispers... I am ${voice.name}, your storyteller.`,
           voice: voice.id,
           rate: `${actualRate >= 0 ? '+' : ''}${actualRate}%`,
-          pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}%`,
+          pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`,
         }),
         signal: previewAbortRef.current.signal,
       });
@@ -136,37 +142,79 @@ export default function MicrosoftTTSPage() {
     }
   };
 
+  // Process chunk with API
+  const processChunk = async (chunk, voiceId, rate, pitch) => {
+    const response = await fetch("/api/ms-tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: chunk, voice: voiceId, rate, pitch }),
+    });
+    if (!response.ok) throw new Error((await response.json()).error || "Failed");
+    return response.blob();
+  };
+
+  // Process chunks in parallel batches
   const handleGenerate = async () => {
     if (!text.trim()) { alert("Please enter text"); return; }
     cleanupPreviousAudio();
     abortRef.current = false;
     setIsGenerating(true);
     setError(null);
+    setElapsedTime(0);
     setProgress({ current: 0, total: 0, percent: 0 });
+
+    // Start timer
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
 
     try {
       const chunks = splitTextIntoChunks(text.trim());
       const totalChunks = chunks.length;
-      const audioBlobs = [];
+      const audioBlobs = new Array(totalChunks);
+      const BATCH_SIZE = 10; // Process 10 chunks at a time
+      
+      const rate = `${actualRate >= 0 ? '+' : ''}${actualRate}%`;
+      const pitch = `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`;
+      const voiceId = selectedVoice?.id || "en-US-GuyNeural";
+
       setProgress({ current: 0, total: totalChunks, percent: 0 });
 
-      for (let i = 0; i < chunks.length; i++) {
+      // Process in batches
+      for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
         if (abortRef.current) throw new Error("Generation cancelled");
-        const response = await fetch("/api/ms-tts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: chunks[i],
-            voice: selectedVoice?.id || "en-US-GuyNeural",
-            rate: `${actualRate >= 0 ? '+' : ''}${actualRate}%`,
-            pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}%`,
-          }),
+
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks);
+        const batchPromises = [];
+
+        // Create promises for this batch (preserving order via index)
+        for (let i = batchStart; i < batchEnd; i++) {
+          const index = i;
+          batchPromises.push(
+            processChunk(chunks[index], voiceId, rate, pitch)
+              .then(blob => { audioBlobs[index] = blob; })
+          );
+        }
+
+        // Wait for all in batch to complete
+        await Promise.all(batchPromises);
+
+        // Update progress
+        const completed = batchEnd;
+        setProgress({
+          current: completed,
+          total: totalChunks,
+          percent: Math.round((completed / totalChunks) * 100),
         });
-        if (!response.ok) throw new Error((await response.json()).error || `Failed chunk ${i + 1}`);
-        audioBlobs.push(await response.blob());
-        setProgress({ current: i + 1, total: totalChunks, percent: Math.round(((i + 1) / totalChunks) * 100) });
       }
 
+      // Stop timer
+      clearInterval(timerRef.current);
+      const finalTime = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedTime(finalTime);
+
+      // Combine all blobs in order
       const combinedBlob = new Blob(audioBlobs, { type: "audio/mpeg" });
       setGeneratedAudio({
         url: URL.createObjectURL(combinedBlob),
@@ -175,8 +223,10 @@ export default function MicrosoftTTSPage() {
         voice: selectedVoice?.name || "Unknown",
         style: useCustom ? "Custom" : selectedStyle.name,
         chunks: totalChunks,
+        duration: finalTime,
       });
     } catch (err) {
+      clearInterval(timerRef.current);
       if (err.message !== "Generation cancelled") setError(err.message);
     } finally {
       setIsGenerating(false);
@@ -184,7 +234,11 @@ export default function MicrosoftTTSPage() {
     }
   };
 
-  const handleCancel = () => { abortRef.current = true; };
+  const handleCancel = () => { 
+    abortRef.current = true; 
+    clearInterval(timerRef.current);
+  };
+  
   const handleDownload = () => {
     if (!generatedAudio) return;
     const a = document.createElement("a");
@@ -201,7 +255,7 @@ export default function MicrosoftTTSPage() {
           <p className="subtitle">Premium Neural Voices • Style Presets • Unlimited • FREE</p>
           <div className="api-status">
             <span className="api-badge">✓ {voices.length} Voices</span>
-            <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>📖 200K+ chars</span>
+            <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ 10x Parallel</span>
           </div>
         </header>
 
@@ -213,7 +267,7 @@ export default function MicrosoftTTSPage() {
                 <div>
                   <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Selected Voice</div>
                   <div style={{ fontSize: "1.1rem", fontWeight: "700", color: "var(--text)" }}>{selectedVoice.name}</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{selectedVoice.gender} • {selectedVoice.lang} • {selectedVoice.style?.replace(/🎙️|📰|💬|🇮🇳|🍁|☘️|🥝|🇿🇦|🇸🇬|🇩🇪|🇫🇷|🇪🇸|🇮🇹|🇧🇷|🇳🇱|🇷🇺|🇯🇵|🇰🇷|🇨🇳|🇸🇦|🇹🇷|🇮🇱/g, "").trim()}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{selectedVoice.gender} • {selectedVoice.lang}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Style: {useCustom ? "Custom" : selectedStyle.name}</div>
@@ -231,7 +285,7 @@ export default function MicrosoftTTSPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.5rem" }}>
               {STYLE_PRESETS.map((style) => (
                 <button key={style.id} onClick={() => { setSelectedStyle(style); setUseCustom(false); }}
-                  style={{ padding: "0.6rem", borderRadius: "10px", border: !useCustom && selectedStyle.id === style.id ? "2px solid var(--primary)" : "1px solid var(--input-border)", background: !useCustom && selectedStyle.id === style.id ? "rgba(99, 102, 241, 0.15)" : "var(--input-bg)", cursor: "pointer", textAlign: "left", position: "relative" }}>
+                  style={{ padding: "0.6rem", borderRadius: "10px", border: !useCustom && selectedStyle.id === style.id ? "2px solid var(--primary)" : "1px solid var(--input-border)", background: !useCustom && selectedStyle.id === style.id ? "rgba(99, 102, 241, 0.15)" : "var(--input-bg)", cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: "1.1rem" }}>{style.icon}</div>
                   <div style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text)" }}>{style.name}</div>
                   <div style={{ fontSize: "0.6rem", color: "var(--text-muted)" }}>{style.description}</div>
@@ -245,7 +299,6 @@ export default function MicrosoftTTSPage() {
                 <div style={{ fontSize: "1.1rem" }}>⚙️</div>
                 <div style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text)" }}>Custom</div>
                 <div style={{ fontSize: "0.6rem", color: "var(--text-muted)" }}>Set your own</div>
-                {useCustom && <div style={{ fontSize: "0.55rem", color: "var(--primary)", marginTop: "0.25rem", fontFamily: "monospace" }}>{customRate >= 0 ? '+' : ''}{customRate}% | {customPitch >= 0 ? '+' : ''}{customPitch}Hz</div>}
               </button>
             </div>
           </div>
@@ -293,11 +346,7 @@ export default function MicrosoftTTSPage() {
                     style={{ minWidth: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {loadingVoice === voice.id ? (
                       <span className="spinner" style={{ width: "12px", height: "12px" }}></span>
-                    ) : playingVoice === voice.id ? (
-                      "⏹"
-                    ) : (
-                      "▶"
-                    )}
+                    ) : playingVoice === voice.id ? "⏹" : "▶"}
                   </button>
                 </div>
               ))}
@@ -306,18 +355,22 @@ export default function MicrosoftTTSPage() {
 
           {/* Text Input */}
           <div className="form-group">
-            <label className="label">Text <span className="word-count">{wordCount.toLocaleString()} words • {charCount.toLocaleString()} chars</span></label>
+            <label className="label">Text <span className="word-count">{wordCount.toLocaleString()} words • {charCount.toLocaleString()} chars • ~{Math.ceil(charCount / 2000)} chunks</span></label>
             <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)}
-              placeholder="Paste your text here - up to 200,000+ characters. Select a reading style above to control narration."
+              placeholder="Paste your text here - unlimited characters. Processing uses 10x parallel for speed!"
               rows={10} />
           </div>
 
           {/* Progress */}
-          {isGenerating && progress.total > 0 && (
+          {isGenerating && (
             <div className="form-group">
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Chunk {progress.current}/{progress.total}</span>
-                <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "var(--primary)" }}>{progress.percent}%</span>
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                  Chunk {progress.current}/{progress.total} (10 parallel)
+                </span>
+                <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "var(--primary)" }}>
+                  {progress.percent}% • ⏱️ {formatTime(elapsedTime)}
+                </span>
               </div>
               <div style={{ width: "100%", height: "8px", background: "var(--input-bg)", borderRadius: "4px", overflow: "hidden" }}>
                 <div style={{ width: `${progress.percent}%`, height: "100%", background: "linear-gradient(90deg, #6366f1, #8b5cf6)", transition: "width 0.3s" }} />
@@ -328,7 +381,7 @@ export default function MicrosoftTTSPage() {
           {/* Generate Button */}
           {!isGenerating ? (
             <button className="generate-btn" onClick={handleGenerate} disabled={!text.trim()}>
-              🎙️ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style
+              ⚡ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style (10x parallel)
             </button>
           ) : (
             <button className="generate-btn" onClick={handleCancel} style={{ background: "#ef4444" }}>⏹ Cancel</button>
@@ -341,8 +394,9 @@ export default function MicrosoftTTSPage() {
             <h2 className="results-title">🎵 Generated Audio</h2>
             <div className="merged-card">
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
-                {generatedAudio.voice} • {generatedAudio.style} • {generatedAudio.wordCount.toLocaleString()} words
-                {generatedAudio.chunks > 1 && ` • ${generatedAudio.chunks} chunks`}
+                {generatedAudio.voice} • {generatedAudio.style} • {generatedAudio.wordCount.toLocaleString()} words • {generatedAudio.chunks} chunks
+                <br />
+                <span style={{ color: "var(--primary)" }}>⏱️ Generated in {formatTime(generatedAudio.duration)}</span>
               </p>
               <audio controls src={generatedAudio.url} style={{ width: "100%" }} />
               <button className="download-btn primary" onClick={handleDownload} style={{ marginTop: "1rem", width: "100%" }}>⬇️ Download MP3</button>
