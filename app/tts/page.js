@@ -70,6 +70,7 @@ export default function MicrosoftTTSPage() {
   const [playingVoice, setPlayingVoice] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [showChunkPreview, setShowChunkPreview] = useState(false);
   const audioRef = useRef(null);
   const abortRef = useRef(false);
   const previewAbortRef = useRef(null);
@@ -79,6 +80,14 @@ export default function MicrosoftTTSPage() {
   const charCount = text.trim().length;
   const actualRate = useCustom ? customRate : selectedStyle.rate;
   const actualPitch = useCustom ? customPitch : selectedStyle.pitch;
+  
+  // Preview chunks for verification
+  const previewChunks = text.trim() ? splitTextIntoChunks(text.trim()).map((chunk, i) => {
+    const words = chunk.split(/\s+/);
+    const first3 = words.slice(0, 3).join(' ');
+    const last3 = words.slice(-3).join(' ');
+    return { index: i + 1, chars: chunk.length, first3, last3 };
+  }) : [];
 
   useEffect(() => {
     fetch("/api/ms-tts")
@@ -90,6 +99,20 @@ export default function MicrosoftTTSPage() {
       })
       .catch(err => console.error("Failed to load voices:", err));
   }, []);
+
+  // Warn user if they try to leave during generation
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isGenerating) {
+        e.preventDefault();
+        e.returnValue = "Voice generation is in progress. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isGenerating]);
 
   const filteredVoices = voices.filter(v => filter === "all" ? true : v.category === filter);
 
@@ -173,7 +196,7 @@ export default function MicrosoftTTSPage() {
       const chunks = splitTextIntoChunks(text.trim());
       const totalChunks = chunks.length;
       const audioBlobs = new Array(totalChunks);
-      const BATCH_SIZE = 10; // Process 10 chunks at a time
+      const BATCH_SIZE = 50; // Process 50 chunks at a time
       
       const rate = `${actualRate >= 0 ? '+' : ''}${actualRate}%`;
       const pitch = `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`;
@@ -255,7 +278,7 @@ export default function MicrosoftTTSPage() {
           <p className="subtitle">Premium Neural Voices • Style Presets • Unlimited • FREE</p>
           <div className="api-status">
             <span className="api-badge">✓ {voices.length} Voices</span>
-            <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ 10x Parallel</span>
+            <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ 50x Parallel</span>
           </div>
         </header>
 
@@ -355,18 +378,47 @@ export default function MicrosoftTTSPage() {
 
           {/* Text Input */}
           <div className="form-group">
-            <label className="label">Text <span className="word-count">{wordCount.toLocaleString()} words • {charCount.toLocaleString()} chars • ~{Math.ceil(charCount / 2000)} chunks</span></label>
+            <label className="label">Text <span className="word-count">{wordCount.toLocaleString()} words • {charCount.toLocaleString()} chars • ~{previewChunks.length} chunks</span></label>
             <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)}
-              placeholder="Paste your text here - unlimited characters. Processing uses 10x parallel for speed!"
+              placeholder="Paste your text here - unlimited characters. Processing uses 50x parallel for speed!"
               rows={10} />
+            
+            {/* Chunk Preview Toggle */}
+            {text.trim() && previewChunks.length > 1 && (
+              <button 
+                onClick={() => setShowChunkPreview(!showChunkPreview)}
+                style={{ marginTop: "0.5rem", padding: "0.4rem 0.8rem", fontSize: "0.75rem", background: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: "8px", cursor: "pointer", color: "var(--text-muted)" }}>
+                {showChunkPreview ? "🔼 Hide" : "🔽 Show"} Chunk Preview ({previewChunks.length} chunks)
+              </button>
+            )}
           </div>
+
+          {/* Chunk Preview - Verify Order */}
+          {showChunkPreview && previewChunks.length > 0 && (
+            <div className="form-group" style={{ background: "var(--input-bg)", padding: "1rem", borderRadius: "12px", maxHeight: "200px", overflowY: "auto" }}>
+              <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                ✅ Verify chunk order: Each row shows first 3 → last 3 words
+              </div>
+              {previewChunks.map((chunk) => (
+                <div key={chunk.index} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", borderBottom: "1px solid var(--input-border)", fontSize: "0.7rem" }}>
+                  <span style={{ minWidth: "40px", color: "var(--primary)", fontWeight: "600" }}>#{chunk.index}</span>
+                  <span style={{ color: "var(--text-muted)" }}>{chunk.chars} chars</span>
+                  <span style={{ flex: 1, color: "var(--text)" }}>
+                    <strong>{chunk.first3}</strong>
+                    <span style={{ color: "var(--text-muted)" }}> ... </span>
+                    <strong>{chunk.last3}</strong>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Progress */}
           {isGenerating && (
             <div className="form-group">
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
                 <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                  Chunk {progress.current}/{progress.total} (10 parallel)
+                  Chunk {progress.current}/{progress.total} (50 parallel)
                 </span>
                 <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "var(--primary)" }}>
                   {progress.percent}% • ⏱️ {formatTime(elapsedTime)}
@@ -381,7 +433,7 @@ export default function MicrosoftTTSPage() {
           {/* Generate Button */}
           {!isGenerating ? (
             <button className="generate-btn" onClick={handleGenerate} disabled={!text.trim()}>
-              ⚡ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style (10x parallel)
+              ⚡ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style (50x parallel)
             </button>
           ) : (
             <button className="generate-btn" onClick={handleCancel} style={{ background: "#ef4444" }}>⏹ Cancel</button>
