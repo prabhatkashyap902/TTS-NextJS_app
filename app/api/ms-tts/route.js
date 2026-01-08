@@ -3,9 +3,50 @@ import { UniversalEdgeTTS } from "edge-tts-universal";
 
 export const maxDuration = 120;
 
+// Helper function to format timestamp for SRT (HH:MM:SS,mmm)
+function formatSrtTimestamp(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const milliseconds = ms % 1000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(milliseconds).padStart(3, '0')}`;
+}
+
+// Create SRT with grouped words (4-5 words per subtitle)
+// NOTE: The library returns offset and duration in 100-nanosecond units (ticks)
+// We need to convert to milliseconds by dividing by 10,000
+function createGroupedSRT(wordBoundaries, wordsPerGroup = 5) {
+  if (!wordBoundaries || wordBoundaries.length === 0) return "";
+  
+  let srtContent = "";
+  let subtitleIndex = 1;
+  
+  for (let i = 0; i < wordBoundaries.length; i += wordsPerGroup) {
+    const groupEnd = Math.min(i + wordsPerGroup, wordBoundaries.length);
+    const group = wordBoundaries.slice(i, groupEnd);
+    
+    if (group.length === 0) continue;
+    
+    // Convert from 100-nanosecond units to milliseconds (divide by 10,000)
+    const startTimeMs = Math.floor(group[0].offset / 10000);
+    const lastWord = group[group.length - 1];
+    const endTimeMs = Math.floor((lastWord.offset + lastWord.duration) / 10000);
+    const text = group.map(w => w.text).join(' ');
+    
+    srtContent += `${subtitleIndex}\n`;
+    srtContent += `${formatSrtTimestamp(startTimeMs)} --> ${formatSrtTimestamp(endTimeMs)}\n`;
+    srtContent += `${text}\n\n`;
+    subtitleIndex++;
+  }
+  
+  return srtContent;
+}
+
 const VOICES = {
   // ===== US MALE VOICES (NARRATOR/STORYTELLING) =====
-  "en-US-GuyNeural": { name: "Guy", gender: "Male", style: "🎙️ Deep Narrator", lang: "en-US", featured: true, category: "narrator" },
+  "en-US-GuyNeural": { name: "Guy", gender: "Male", style: "�️ Deep Narrator", lang: "en-US", featured: true, category: "narrator" },
+  "en-CA-LiamNeural": { name: "Liam", gender: "Male", style: "� Canadian", lang: "en-CA", featured: true, category: "narrator" },
   "en-US-ChristopherNeural": { name: "Christopher", gender: "Male", style: "🎙️ Professional", lang: "en-US", featured: true, category: "narrator" },
   "en-US-EricNeural": { name: "Eric", gender: "Male", style: "🎙️ Friendly Deep", lang: "en-US", featured: true, category: "narrator" },
   "en-US-RogerNeural": { name: "Roger", gender: "Male", style: "🎙️ Senior Narrator", lang: "en-US", featured: true, category: "narrator" },
@@ -42,7 +83,6 @@ const VOICES = {
   "en-IN-NeerjaExpressiveNeural": { name: "Neerja Expressive", gender: "Female", style: "🇮🇳 Indian Expressive", lang: "en-IN", category: "indian" },
   
   // ===== CANADIAN VOICES =====
-  "en-CA-LiamNeural": { name: "Liam", gender: "Male", style: "🍁 Canadian", lang: "en-CA", category: "other" },
   "en-CA-ClaraNeural": { name: "Clara", gender: "Female", style: "🍁 Canadian", lang: "en-CA", category: "other" },
   
   // ===== IRISH VOICES =====
@@ -85,7 +125,7 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { text, voice = "en-US-GuyNeural", rate = "+0%", pitch = "+0Hz" } = await request.json();
+    const { text, voice = "en-US-GuyNeural", rate = "+0%", pitch = "+0Hz", includeSrt = false } = await request.json();
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return NextResponse.json({ error: "Text is required" }, { status: 400 });
@@ -97,7 +137,7 @@ export async function POST(request) {
     const formattedRate = rate.includes('%') ? rate : `${rate}%`;
     const formattedPitch = pitch.includes('Hz') ? pitch : pitch.replace('%', 'Hz');
 
-    console.log(`TTS: ${voice}, ${formattedRate}, ${formattedPitch}, ${trimmedText.length} chars`);
+    console.log(`TTS: ${voice}, ${formattedRate}, ${formattedPitch}, ${trimmedText.length} chars, srt: ${includeSrt}`);
 
     // Create TTS instance
     const tts = new UniversalEdgeTTS(trimmedText, voice, {
@@ -108,9 +148,23 @@ export async function POST(request) {
     // Synthesize
     const result = await tts.synthesize();
     
-    // Get audio buffer correctly
+    // Get audio buffer
     const audioBuffer = Buffer.from(await result.audio.arrayBuffer());
 
+    // If SRT requested, return JSON with audio + subtitles
+    if (includeSrt) {
+      // Create grouped SRT (4-5 words per subtitle)
+      const wordBoundaries = result.subtitle || [];
+      const srtContent = createGroupedSRT(wordBoundaries, 5);
+      
+      return NextResponse.json({
+        audio: audioBuffer.toString('base64'),
+        srt: srtContent,
+        wordCount: wordBoundaries.length,
+      });
+    }
+
+    // Default: return audio blob
     return new NextResponse(audioBuffer, {
       status: 200,
       headers: {

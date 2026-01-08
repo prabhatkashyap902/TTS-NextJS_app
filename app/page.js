@@ -82,7 +82,7 @@ export default function TTSPage() {
   const [playingVoice, setPlayingVoice] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [showChunkPreview, setShowChunkPreview] = useState(false);
+  const [generatingSrt, setGeneratingSrt] = useState(false);
   const audioRef = useRef(null);
   const abortRef = useRef(false);
   const previewAbortRef = useRef(null);
@@ -281,7 +281,7 @@ export default function TTSPage() {
       });
 
       // Track success
-      trackGenerationSuccess(wordCount, totalChunks, finalTime, voiceName, styleName);
+      trackGenerationSuccess(wordCount, charCount, totalChunks, finalTime, voiceName, styleName);
     } catch (err) {
       clearInterval(timerRef.current);
       if (err.message !== "Generation cancelled") {
@@ -306,6 +306,152 @@ export default function TTSPage() {
     a.href = generatedAudio.url;
     a.download = `speech_${selectedVoice?.name}_${selectedStyle?.id || "custom"}.mp3`;
     a.click();
+  };
+
+  // Process a single chunk for SRT generation (returns audio duration + srt data)
+  const processChunkForSrt = async (chunk, voiceId, rate, pitch) => {
+    const response = await fetch("/api/ms-tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: chunk, voice: voiceId, rate, pitch, includeSrt: true }),
+    });
+    if (!response.ok) throw new Error((await response.json()).error || "Failed");
+    const data = await response.json();
+    
+    // Decode base64 audio to get actual duration
+    const audioBlob = new Blob([Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))], { type: 'audio/mpeg' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    
+    // Get actual audio duration
+    const duration = await new Promise((resolve) => {
+      const audio = new Audio(audioUrl);
+      audio.addEventListener('loadedmetadata', () => {
+        resolve(audio.duration * 1000); // Convert to milliseconds
+        URL.revokeObjectURL(audioUrl);
+      });
+      audio.addEventListener('error', () => {
+        resolve(0);
+        URL.revokeObjectURL(audioUrl);
+      });
+    });
+    
+    return { srt: data.srt, duration };
+  };
+
+  // Parse SRT content into structured entries
+  const parseSrt = (srtContent) => {
+    if (!srtContent) return [];
+    const entries = [];
+    const blocks = srtContent.trim().split(/\n\n+/);
+    
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      if (lines.length >= 3) {
+        const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/);
+        if (timeMatch) {
+          entries.push({
+            start: timeMatch[1],
+            end: timeMatch[2],
+            text: lines.slice(2).join('\n')
+          });
+        }
+      }
+    }
+    return entries;
+  };
+
+  // Convert timestamp string to milliseconds
+  const timestampToMs = (ts) => {
+    const [time, ms] = ts.split(',');
+    const [h, m, s] = time.split(':').map(Number);
+    return h * 3600000 + m * 60000 + s * 1000 + parseInt(ms);
+  };
+
+  // Convert milliseconds to timestamp string
+  const msToTimestamp = (ms) => {
+    const hours = Math.floor(ms / 3600000);
+    const minutes = Math.floor((ms % 3600000) / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    const millis = Math.floor(ms % 1000);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+  };
+
+  // Generate SRT subtitles in parallel chunks and auto-download
+  const handleDownloadSubtitles = async () => {
+    if (!generatedAudio || generatingSrt) return;
+    setGeneratingSrt(true);
+    setProgress({ current: 0, total: 0, percent: 0 });
+
+    try {
+      const rate = `${actualRate >= 0 ? '+' : ''}${actualRate}%`;
+      const pitch = `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`;
+      const voiceId = selectedVoice?.id || "en-US-GuyNeural";
+      const chunks = splitTextIntoChunks(text.trim());
+      const totalChunks = chunks.length;
+      
+      // Store results with order preserved
+      const results = new Array(totalChunks);
+      const BATCH_SIZE = 50;
+
+      setProgress({ current: 0, total: totalChunks, percent: 0 });
+
+      // Process in batches (parallel within batch)
+      for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks);
+        const batchPromises = [];
+
+        for (let i = batchStart; i < batchEnd; i++) {
+          const index = i;
+          batchPromises.push(
+            processChunkForSrt(chunks[index], voiceId, rate, pitch)
+              .then(result => { results[index] = result; })
+          );
+        }
+
+        await Promise.all(batchPromises);
+        setProgress({
+          current: batchEnd,
+          total: totalChunks,
+          percent: Math.round((batchEnd / totalChunks) * 100),
+        });
+      }
+
+      // Combine SRTs with cumulative time offset
+      let combinedSrt = "";
+      let subtitleIndex = 1;
+      let cumulativeOffset = 0;
+
+      for (let i = 0; i < results.length; i++) {
+        const { srt, duration } = results[i];
+        const entries = parseSrt(srt);
+
+        for (const entry of entries) {
+          const startMs = timestampToMs(entry.start) + cumulativeOffset;
+          const endMs = timestampToMs(entry.end) + cumulativeOffset;
+          
+          combinedSrt += `${subtitleIndex}\n`;
+          combinedSrt += `${msToTimestamp(startMs)} --> ${msToTimestamp(endMs)}\n`;
+          combinedSrt += `${entry.text}\n\n`;
+          subtitleIndex++;
+        }
+
+        cumulativeOffset += duration;
+      }
+
+      // Auto-download
+      const blob = new Blob([combinedSrt], { type: 'text/srt' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `subtitles_${selectedVoice?.name}_${selectedStyle?.id || "custom"}.srt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Subtitle generation failed: ${err.message}`);
+    } finally {
+      setGeneratingSrt(false);
+      setProgress({ current: 0, total: 0, percent: 0 });
+    }
   };
 
   return (
@@ -361,6 +507,25 @@ export default function TTSPage() {
             <span className="api-badge">✓ {voices.length} Voices</span>
             <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ Fast</span>
           </div>
+          <a 
+            href="/subtitles" 
+            style={{
+              marginTop: "0.75rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.4rem 0.8rem",
+              background: "rgba(99, 102, 241, 0.1)",
+              border: "1px solid rgba(99, 102, 241, 0.3)",
+              borderRadius: "20px",
+              textDecoration: "none",
+              fontSize: "0.75rem",
+              color: "var(--primary)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            📝 Get Subtitles Only
+          </a>
         </header>
 
         <div className="form-container">
@@ -463,36 +628,7 @@ export default function TTSPage() {
             <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)}
               placeholder="Paste your text here - unlimited characters. Processing uses 50x Fastest for speed!"
               rows={10} />
-            
-            {/* Chunk Preview Toggle */}
-            {text.trim() && previewChunks.length > 1 && (
-              <button 
-                onClick={() => setShowChunkPreview(!showChunkPreview)}
-                style={{ marginTop: "0.5rem", padding: "0.4rem 0.8rem", fontSize: "0.75rem", background: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: "8px", cursor: "pointer", color: "var(--text-muted)" }}>
-                {showChunkPreview ? "🔼 Hide" : "🔽 Show"} Text Preview ({previewChunks.length} parts)
-              </button>
-            )}
           </div>
-
-          {/* Chunk Preview - Verify Order */}
-          {showChunkPreview && previewChunks.length > 0 && (
-            <div className="form-group" style={{ background: "var(--input-bg)", padding: "1rem", borderRadius: "12px", maxHeight: "200px", overflowY: "auto" }}>
-              <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                ✅ Verify text order: Each row shows first 3 → last 3 words
-              </div>
-              {previewChunks.map((chunk) => (
-                <div key={chunk.index} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", borderBottom: "1px solid var(--input-border)", fontSize: "0.7rem" }}>
-                  <span style={{ minWidth: "40px", color: "var(--primary)", fontWeight: "600" }}>#{chunk.index}</span>
-                  <span style={{ color: "var(--text-muted)" }}>{chunk.chars} chars</span>
-                  <span style={{ flex: 1, color: "var(--text)" }}>
-                    <strong>{chunk.first3}</strong>
-                    <span style={{ color: "var(--text-muted)" }}> ... </span>
-                    <strong>{chunk.last3}</strong>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
 
           {/* Progress */}
           {isGenerating && (
@@ -532,7 +668,19 @@ export default function TTSPage() {
                 <span style={{ color: "var(--primary)" }}>⏱️ Generated in {formatTime(generatedAudio.duration)}</span>
               </p>
               <audio controls src={generatedAudio.url} style={{ width: "100%" }} />
-              <button className="download-btn primary" onClick={handleDownload} style={{ marginTop: "1rem", width: "100%" }}>⬇️ Download MP3</button>
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                <button className="download-btn primary" onClick={handleDownload} style={{ flex: 1 }}>⬇️ Download MP3</button>
+                <button 
+                  className="download-btn" 
+                  onClick={handleDownloadSubtitles} 
+                  disabled={generatingSrt}
+                  style={{ flex: 1, background: "rgba(99, 102, 241, 0.1)", borderColor: "var(--primary)" }}
+                >
+                  {generatingSrt 
+                    ? `⏳ ${progress.percent > 0 ? `${progress.percent}%` : "Starting..."}` 
+                    : "⬇️ Download Subtitles"}
+                </button>
+              </div>
             </div>
           </div>
         )}
