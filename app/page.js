@@ -681,6 +681,22 @@ export default function TTSPage() {
                     : "⬇️ Download Subtitles"}
                 </button>
               </div>
+              {/* Subtitle Generation Progress */}
+              {generatingSrt && (
+                <div style={{ marginTop: "1rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      📝 Generating subtitles: {progress.current}/{progress.total} chunks
+                    </span>
+                    <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--primary)" }}>
+                      {progress.percent}%
+                    </span>
+                  </div>
+                  <div style={{ width: "100%", height: "6px", background: "var(--input-bg)", borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ width: `${progress.percent}%`, height: "100%", background: "linear-gradient(90deg, #6366f1, #8b5cf6)", transition: "width 0.3s" }} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
