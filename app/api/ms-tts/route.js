@@ -4,50 +4,78 @@ import { UniversalEdgeTTS } from "edge-tts-universal";
 export const maxDuration = 120;
 
 const VOICES = {
-  // ===== DEEP MALE VOICES (NARRATOR/STORYTELLING) =====
+  // ===== US MALE VOICES (NARRATOR/STORYTELLING) =====
   "en-US-GuyNeural": { name: "Guy", gender: "Male", style: "🎙️ Deep Narrator", lang: "en-US", featured: true, category: "narrator" },
   "en-US-ChristopherNeural": { name: "Christopher", gender: "Male", style: "🎙️ Professional", lang: "en-US", featured: true, category: "narrator" },
   "en-US-EricNeural": { name: "Eric", gender: "Male", style: "🎙️ Friendly Deep", lang: "en-US", featured: true, category: "narrator" },
   "en-US-RogerNeural": { name: "Roger", gender: "Male", style: "🎙️ Senior Narrator", lang: "en-US", featured: true, category: "narrator" },
   "en-US-SteffanNeural": { name: "Steffan", gender: "Male", style: "🎙️ Authoritative", lang: "en-US", featured: true, category: "narrator" },
-  "en-GB-RyanNeural": { name: "Ryan", gender: "Male", style: "🎙️ British Deep", lang: "en-GB", featured: true, category: "narrator" },
-  "en-AU-WilliamNeural": { name: "William", gender: "Male", style: "🎙️ Australian Deep", lang: "en-AU", featured: true, category: "narrator" },
+  "en-US-AndrewNeural": { name: "Andrew", gender: "Male", style: "🎙️ News Anchor", lang: "en-US", featured: true, category: "narrator" },
+  "en-US-BrianNeural": { name: "Brian", gender: "Male", style: "🎙️ Newscast", lang: "en-US", featured: true, category: "narrator" },
+  "en-US-AndrewMultilingualNeural": { name: "Andrew ML", gender: "Male", style: "🎙️ Warm Engaging", lang: "en-US", featured: true, category: "narrator" },
+  "en-US-BrianMultilingualNeural": { name: "Brian ML", gender: "Male", style: "🎙️ Versatile", lang: "en-US", featured: true, category: "narrator" },
   
-  // ===== MULTILINGUAL DEEP VOICES =====
-  "en-US-AndrewMultilingualNeural": { name: "Andrew", gender: "Male", style: "🎙️ Warm Engaging", lang: "en-US", featured: true, category: "narrator" },
-  "en-US-BrianMultilingualNeural": { name: "Brian", gender: "Male", style: "🎙️ Versatile", lang: "en-US", featured: true, category: "narrator" },
-  
-  // ===== FEMALE NARRATOR VOICES =====
+  // ===== US FEMALE VOICES =====
+  "en-US-AvaNeural": { name: "Ava", gender: "Female", style: "🎙️ Expressive", lang: "en-US", featured: true, category: "narrator" },
+  "en-US-AvaMultilingualNeural": { name: "Ava ML", gender: "Female", style: "🎙️ Expressive ML", lang: "en-US", featured: true, category: "narrator" },
   "en-US-AriaNeural": { name: "Aria", gender: "Female", style: "🎙️ Natural Narrator", lang: "en-US", featured: true, category: "narrator" },
   "en-US-JennyNeural": { name: "Jenny", gender: "Female", style: "🎙️ Warm Storyteller", lang: "en-US", featured: true, category: "narrator" },
-  "en-GB-SoniaNeural": { name: "Sonia", gender: "Female", style: "🎙️ British", lang: "en-GB", featured: true, category: "narrator" },
   "en-US-MichelleNeural": { name: "Michelle", gender: "Female", style: "🎙️ Warm", lang: "en-US", featured: true, category: "narrator" },
-  
-  // ===== NEWSCAST / PROFESSIONAL =====
-  "en-US-AndrewNeural": { name: "Andrew", gender: "Male", style: "📰 News Anchor", lang: "en-US", category: "news" },
-  "en-US-BrianNeural": { name: "Brian", gender: "Male", style: "📰 Newscast", lang: "en-US", category: "news" },
   "en-US-EmmaNeural": { name: "Emma", gender: "Female", style: "📰 News Anchor", lang: "en-US", category: "news" },
-  "en-GB-ThomasNeural": { name: "Thomas", gender: "Male", style: "📰 British News", lang: "en-GB", category: "news" },
-  "en-AU-NatashaNeural": { name: "Natasha", gender: "Female", style: "📰 Australian", lang: "en-AU", category: "news" },
-  
-  // ===== CONVERSATIONAL / CASUAL =====
+  "en-US-EmmaMultilingualNeural": { name: "Emma ML", gender: "Female", style: "📰 News ML", lang: "en-US", category: "news" },
   "en-US-AnaNeural": { name: "Ana", gender: "Female", style: "💬 Young Friendly", lang: "en-US", category: "casual" },
-  "en-GB-LibbyNeural": { name: "Libby", gender: "Female", style: "💬 British Casual", lang: "en-GB", category: "casual" },
-  "en-GB-MiaNeural": { name: "Mia", gender: "Female", style: "💬 British Young", lang: "en-GB", category: "casual" },
   
-  // ===== INDIAN ENGLISH =====
+  // ===== UK VOICES =====
+  "en-GB-RyanNeural": { name: "Ryan", gender: "Male", style: "🇬🇧 British Male", lang: "en-GB", featured: true, category: "narrator" },
+  "en-GB-ThomasNeural": { name: "Thomas", gender: "Male", style: "🇬🇧 British News", lang: "en-GB", category: "news" },
+  "en-GB-SoniaNeural": { name: "Sonia", gender: "Female", style: "🇬🇧 British", lang: "en-GB", featured: true, category: "narrator" },
+  "en-GB-LibbyNeural": { name: "Libby", gender: "Female", style: "🇬🇧 British Casual", lang: "en-GB", category: "casual" },
+  "en-GB-MaisieNeural": { name: "Maisie", gender: "Female", style: "🇬🇧 British Young", lang: "en-GB", category: "casual" },
+  
+  // ===== AUSTRALIAN VOICES =====
+  "en-AU-WilliamMultilingualNeural": { name: "William ML", gender: "Male", style: "🇦🇺 Australian", lang: "en-AU", featured: true, category: "narrator" },
+  "en-AU-NatashaNeural": { name: "Natasha", gender: "Female", style: "🇦🇺 Australian", lang: "en-AU", category: "news" },
+  
+  // ===== INDIAN VOICES =====
   "en-IN-PrabhatNeural": { name: "Prabhat", gender: "Male", style: "🇮🇳 Indian Male", lang: "en-IN", category: "indian" },
   "en-IN-NeerjaNeural": { name: "Neerja", gender: "Female", style: "🇮🇳 Indian Female", lang: "en-IN", category: "indian" },
+  "en-IN-NeerjaExpressiveNeural": { name: "Neerja Expressive", gender: "Female", style: "🇮🇳 Indian Expressive", lang: "en-IN", category: "indian" },
   
-  // ===== OTHER ENGLISH VARIANTS =====
+  // ===== CANADIAN VOICES =====
   "en-CA-LiamNeural": { name: "Liam", gender: "Male", style: "🍁 Canadian", lang: "en-CA", category: "other" },
   "en-CA-ClaraNeural": { name: "Clara", gender: "Female", style: "🍁 Canadian", lang: "en-CA", category: "other" },
-  "en-IE-ConnorNeural": { name: "Connor", gender: "Male", style: "☘️ Irish", lang: "en-IE", category: "other" },
-  "en-NZ-MitchellNeural": { name: "Mitchell", gender: "Male", style: "🥝 NZ", lang: "en-NZ", category: "other" },
-  "en-ZA-LukeNeural": { name: "Luke", gender: "Male", style: "🇿🇦 S.African", lang: "en-ZA", category: "other" },
-  "en-SG-WayneNeural": { name: "Wayne", gender: "Male", style: "🇸🇬 Singapore", lang: "en-SG", category: "other" },
-  "en-NG-AbeoNeural": { name: "Abeo", gender: "Male", style: "🇳🇬 Nigerian", lang: "en-NG", category: "other" },
-  "en-KE-AsiliaNeural": { name: "Asilia", gender: "Female", style: "🇰🇪 Kenyan", lang: "en-KE", category: "other" },
+  
+  // ===== IRISH VOICES =====
+  "en-IE-ConnorNeural": { name: "Connor", gender: "Male", style: "☘️ Irish Male", lang: "en-IE", category: "other" },
+  "en-IE-EmilyNeural": { name: "Emily", gender: "Female", style: "☘️ Irish Female", lang: "en-IE", category: "other" },
+  
+  // ===== NEW ZEALAND VOICES =====
+  "en-NZ-MitchellNeural": { name: "Mitchell", gender: "Male", style: "🥝 NZ Male", lang: "en-NZ", category: "other" },
+  "en-NZ-MollyNeural": { name: "Molly", gender: "Female", style: "🥝 NZ Female", lang: "en-NZ", category: "other" },
+  
+  // ===== SINGAPORE VOICES =====
+  "en-SG-WayneNeural": { name: "Wayne", gender: "Male", style: "🇸🇬 Singapore Male", lang: "en-SG", category: "other" },
+  "en-SG-LunaNeural": { name: "Luna", gender: "Female", style: "🇸🇬 Singapore Female", lang: "en-SG", category: "other" },
+  
+  // ===== SOUTH AFRICAN VOICES =====
+  "en-ZA-LukeNeural": { name: "Luke", gender: "Male", style: "🇿🇦 S.African Male", lang: "en-ZA", category: "other" },
+  "en-ZA-LeahNeural": { name: "Leah", gender: "Female", style: "🇿🇦 S.African Female", lang: "en-ZA", category: "other" },
+  
+  // ===== AFRICAN VOICES =====
+  "en-NG-AbeoNeural": { name: "Abeo", gender: "Male", style: "🇳🇬 Nigerian Male", lang: "en-NG", category: "other" },
+  "en-NG-EzinneNeural": { name: "Ezinne", gender: "Female", style: "🇳🇬 Nigerian Female", lang: "en-NG", category: "other" },
+  "en-KE-AsiliaNeural": { name: "Asilia", gender: "Female", style: "🇰🇪 Kenyan Female", lang: "en-KE", category: "other" },
+  "en-KE-ChilembaNeural": { name: "Chilemba", gender: "Male", style: "🇰🇪 Kenyan Male", lang: "en-KE", category: "other" },
+  "en-TZ-ElimuNeural": { name: "Elimu", gender: "Male", style: "🇹🇿 Tanzanian Male", lang: "en-TZ", category: "other" },
+  "en-TZ-ImaniNeural": { name: "Imani", gender: "Female", style: "🇹🇿 Tanzanian Female", lang: "en-TZ", category: "other" },
+  
+  // ===== HONG KONG VOICES =====
+  "en-HK-SamNeural": { name: "Sam", gender: "Male", style: "🇭🇰 Hong Kong Male", lang: "en-HK", category: "other" },
+  "en-HK-YanNeural": { name: "Yan", gender: "Female", style: "🇭🇰 Hong Kong Female", lang: "en-HK", category: "other" },
+  
+  // ===== PHILIPPINES VOICES =====
+  "en-PH-JamesNeural": { name: "James", gender: "Male", style: "🇵🇭 Philippines Male", lang: "en-PH", category: "other" },
+  "en-PH-RosaNeural": { name: "Rosa", gender: "Female", style: "🇵🇭 Philippines Female", lang: "en-PH", category: "other" },
 };
 
 export async function GET() {
