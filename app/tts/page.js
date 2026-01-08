@@ -1,25 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import {
-  initMixpanel,
-  trackPageView,
-  trackVoiceSelect,
-  trackStyleSelect,
-  trackGenerationStart,
-  trackGenerationSuccess,
-  trackGenerationError,
-  trackDownload,
-  trackVoicePreview,
-  trackSupportClick,
-  trackAPIError,
-} from "@/lib/mixpanel";
 
 const CATEGORIES = [
   { value: "narrator", label: "🎙️ Narrator", description: "Deep, professional voices" },
   { value: "news", label: "📰 Newscast", description: "Professional news voices" },
   { value: "casual", label: "💬 Casual", description: "Friendly voices" },
   { value: "indian", label: "🇮🇳 Indian", description: "Indian English" },
+  { value: "hindi", label: "🇮🇳 Hindi", description: "Hindi language" },
   { value: "all", label: "📋 All", description: "All voices" },
 ];
 
@@ -66,7 +54,7 @@ function formatTime(seconds) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export default function TTSPage() {
+export default function MicrosoftTTSPage() {
   const [text, setText] = useState("");
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState(null);
@@ -101,12 +89,6 @@ export default function TTSPage() {
     return { index: i + 1, chars: chunk.length, first3, last3 };
   }) : [];
 
-  // Initialize Mixpanel and track page view
-  useEffect(() => {
-    initMixpanel();
-    trackPageView('TTS Home');
-  }, []);
-
   useEffect(() => {
     fetch("/api/ms-tts")
       .then(res => res.json())
@@ -115,10 +97,7 @@ export default function TTSPage() {
         const defaultVoice = data.voices?.find(v => v.id === "en-US-GuyNeural") || data.voices?.[0];
         if (defaultVoice) setSelectedVoice(defaultVoice);
       })
-      .catch(err => {
-        console.error("Failed to load voices:", err);
-        trackAPIError('/api/ms-tts', err.message, null);
-      });
+      .catch(err => console.error("Failed to load voices:", err));
   }, []);
 
   // Warn user if they try to leave during generation
@@ -154,7 +133,6 @@ export default function TTSPage() {
     stopPreview();
     setLoadingVoice(voice.id);
     previewAbortRef.current = new AbortController();
-    trackVoicePreview(voice.name);
 
     try {
       const response = await fetch("/api/ms-tts", {
@@ -182,10 +160,7 @@ export default function TTSPage() {
       
       audio.play();
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        alert(`Preview failed: ${err.message}`);
-        trackAPIError('/api/ms-tts', err.message, null);
-      }
+      if (err.name !== 'AbortError') alert(`Preview failed: ${err.message}`);
       setLoadingVoice(null);
     }
   };
@@ -211,14 +186,6 @@ export default function TTSPage() {
     setElapsedTime(0);
     setProgress({ current: 0, total: 0, percent: 0 });
 
-    const styleName = useCustom ? "Custom" : selectedStyle.name;
-    const voiceName = selectedVoice?.name || "Unknown";
-    const chunks = splitTextIntoChunks(text.trim());
-    const totalChunks = chunks.length;
-
-    // Track generation start
-    trackGenerationStart(wordCount, charCount, totalChunks, voiceName, styleName);
-
     // Start timer
     const startTime = Date.now();
     timerRef.current = setInterval(() => {
@@ -226,6 +193,8 @@ export default function TTSPage() {
     }, 1000);
 
     try {
+      const chunks = splitTextIntoChunks(text.trim());
+      const totalChunks = chunks.length;
       const audioBlobs = new Array(totalChunks);
       const BATCH_SIZE = 50; // Process 50 chunks at a time
       
@@ -274,20 +243,14 @@ export default function TTSPage() {
         url: URL.createObjectURL(combinedBlob),
         blob: combinedBlob,
         wordCount, charCount,
-        voice: voiceName,
-        style: styleName,
+        voice: selectedVoice?.name || "Unknown",
+        style: useCustom ? "Custom" : selectedStyle.name,
         chunks: totalChunks,
         duration: finalTime,
       });
-
-      // Track success
-      trackGenerationSuccess(wordCount, totalChunks, finalTime, voiceName, styleName);
     } catch (err) {
       clearInterval(timerRef.current);
-      if (err.message !== "Generation cancelled") {
-        setError(err.message);
-        trackGenerationError(err.message, wordCount, totalChunks, voiceName);
-      }
+      if (err.message !== "Generation cancelled") setError(err.message);
     } finally {
       setIsGenerating(false);
       setProgress({ current: 0, total: 0, percent: 0 });
@@ -301,7 +264,6 @@ export default function TTSPage() {
   
   const handleDownload = () => {
     if (!generatedAudio) return;
-    trackDownload(generatedAudio.voice, generatedAudio.style, generatedAudio.wordCount);
     const a = document.createElement("a");
     a.href = generatedAudio.url;
     a.download = `speech_${selectedVoice?.name}_${selectedStyle?.id || "custom"}.mp3`;
@@ -312,54 +274,11 @@ export default function TTSPage() {
     <div className="app-container">
       <div className="main-content">
         <header className="header">
-          {/* Buy me a chai button - positioned at top on desktop, after header on mobile */}
-          <a 
-            href="https://buymeachai.ezee.li/noobdev007" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            onClick={() => trackSupportClick()}
-            className="support-btn"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.5rem 1rem",
-              background: "rgba(255, 255, 255, 0.95)",
-              border: "1px solid rgba(99, 130, 255, 0.4)",
-              borderRadius: "12px",
-              textDecoration: "none",
-              transition: "all 0.3s ease",
-              cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(99, 130, 255, 0.15)",
-              marginBottom: "1rem",
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "rgba(240, 245, 255, 1)";
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 4px 15px rgba(99, 130, 255, 0.25)";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.95)";
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 2px 8px rgba(99, 130, 255, 0.15)";
-            }}
-          >
-            <span style={{ fontSize: "1.1rem" }}>☕</span>
-            <span style={{ 
-              fontFamily: "var(--font-pacifico), 'Pacifico', cursive", 
-              fontSize: "0.9rem", 
-              color: "#6b8aff",
-              fontWeight: "400",
-            }}>
-              Buy me a chai
-            </span>
-          </a>
-          
-          <h1 className="title">🎙️ Neural TTS</h1>
+          <h1 className="title">🎙️ Microsoft Neural TTS</h1>
           <p className="subtitle">Premium Neural Voices • Style Presets • Unlimited • FREE</p>
           <div className="api-status">
             <span className="api-badge">✓ {voices.length} Voices</span>
-            <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ Fast</span>
+            <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ 50x Fastest</span>
           </div>
         </header>
 
@@ -388,7 +307,7 @@ export default function TTSPage() {
             <label className="label">Reading Style</label>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.5rem" }}>
               {STYLE_PRESETS.map((style) => (
-                <button key={style.id} onClick={() => { setSelectedStyle(style); setUseCustom(false); trackStyleSelect(style.name, false); }}
+                <button key={style.id} onClick={() => { setSelectedStyle(style); setUseCustom(false); }}
                   style={{ padding: "0.6rem", borderRadius: "10px", border: !useCustom && selectedStyle.id === style.id ? "2px solid var(--primary)" : "1px solid var(--input-border)", background: !useCustom && selectedStyle.id === style.id ? "rgba(99, 102, 241, 0.15)" : "var(--input-bg)", cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: "1.1rem" }}>{style.icon}</div>
                   <div style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text)" }}>{style.name}</div>
@@ -398,7 +317,7 @@ export default function TTSPage() {
                   </div>
                 </button>
               ))}
-              <button onClick={() => { setUseCustom(true); trackStyleSelect('Custom', true); }}
+              <button onClick={() => setUseCustom(true)}
                 style={{ padding: "0.6rem", borderRadius: "10px", border: useCustom ? "2px solid var(--primary)" : "1px solid var(--input-border)", background: useCustom ? "rgba(99, 102, 241, 0.15)" : "var(--input-bg)", cursor: "pointer", textAlign: "left" }}>
                 <div style={{ fontSize: "1.1rem" }}>⚙️</div>
                 <div style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text)" }}>Custom</div>
@@ -435,7 +354,7 @@ export default function TTSPage() {
               {filteredVoices.map((voice) => (
                 <div key={voice.id}
                   className={`voice-card ${selectedVoice?.id === voice.id ? "selected" : ""}`}
-                  onClick={() => { setSelectedVoice(voice); trackVoiceSelect(voice.name, voice.gender, voice.lang); }}
+                  onClick={() => setSelectedVoice(voice)}
                   style={{ 
                     ...(voice.featured ? { borderColor: "rgba(34, 197, 94, 0.5)", background: "rgba(34, 197, 94, 0.08)" } : {}),
                     ...(selectedVoice?.id === voice.id ? { borderColor: "var(--primary)", background: "rgba(99, 102, 241, 0.15)", boxShadow: "0 0 0 2px rgba(99, 102, 241, 0.3)" } : {})
@@ -459,9 +378,9 @@ export default function TTSPage() {
 
           {/* Text Input */}
           <div className="form-group">
-            <label className="label">Text <span className="word-count">{wordCount.toLocaleString()} words • {charCount.toLocaleString()} chars</span></label>
+            <label className="label">Text <span className="word-count">{wordCount.toLocaleString()} words • {charCount.toLocaleString()} chars • ~{previewChunks.length} chunks</span></label>
             <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)}
-              placeholder="Paste your text here - unlimited characters. Processing uses 50x Fastest for speed!"
+              placeholder="Paste your text here - unlimited characters. Processing uses 50x fastest for speed!"
               rows={10} />
             
             {/* Chunk Preview Toggle */}
@@ -469,7 +388,7 @@ export default function TTSPage() {
               <button 
                 onClick={() => setShowChunkPreview(!showChunkPreview)}
                 style={{ marginTop: "0.5rem", padding: "0.4rem 0.8rem", fontSize: "0.75rem", background: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: "8px", cursor: "pointer", color: "var(--text-muted)" }}>
-                {showChunkPreview ? "🔼 Hide" : "🔽 Show"} Text Preview ({previewChunks.length} parts)
+                {showChunkPreview ? "🔼 Hide" : "🔽 Show"} Chunk Preview ({previewChunks.length} chunks)
               </button>
             )}
           </div>
@@ -478,7 +397,7 @@ export default function TTSPage() {
           {showChunkPreview && previewChunks.length > 0 && (
             <div className="form-group" style={{ background: "var(--input-bg)", padding: "1rem", borderRadius: "12px", maxHeight: "200px", overflowY: "auto" }}>
               <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                ✅ Verify text order: Each row shows first 3 → last 3 words
+                ✅ Verify chunk order: Each row shows first 3 → last 3 words
               </div>
               {previewChunks.map((chunk) => (
                 <div key={chunk.index} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", borderBottom: "1px solid var(--input-border)", fontSize: "0.7rem" }}>
@@ -498,9 +417,9 @@ export default function TTSPage() {
           {isGenerating && (
             <div className="form-group">
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                  Processing {progress.current}/{progress.total}
-                </span>
+                {/* <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                  Chunk {progress.current}/{progress.total} (50 fast)
+                </span> */}
                 <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "var(--primary)" }}>
                   {progress.percent}% • ⏱️ {formatTime(elapsedTime)}
                 </span>
@@ -514,7 +433,7 @@ export default function TTSPage() {
           {/* Generate Button */}
           {!isGenerating ? (
             <button className="generate-btn" onClick={handleGenerate} disabled={!text.trim()}>
-              ⚡ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style (50x Fastest)
+              ⚡ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style (50x fastest)
             </button>
           ) : (
             <button className="generate-btn" onClick={handleCancel} style={{ background: "#ef4444" }}>⏹ Cancel</button>
@@ -527,7 +446,7 @@ export default function TTSPage() {
             <h2 className="results-title">🎵 Generated Audio</h2>
             <div className="merged-card">
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
-                {generatedAudio.voice} • {generatedAudio.style} • {generatedAudio.wordCount.toLocaleString()} words
+                {generatedAudio.voice} • {generatedAudio.style} • {generatedAudio.wordCount.toLocaleString()} words • {generatedAudio.chunks} chunks
                 <br />
                 <span style={{ color: "var(--primary)" }}>⏱️ Generated in {formatTime(generatedAudio.duration)}</span>
               </p>
@@ -538,6 +457,10 @@ export default function TTSPage() {
         )}
 
         {error && <div className="errors-section"><div className="error-item">{error}</div></div>}
+
+        <div style={{ marginTop: "2rem", textAlign: "center" }}>
+          <a href="/" style={{ color: "var(--primary)", fontSize: "0.8rem" }}>← Google Gemini TTS</a>
+        </div>
       </div>
     </div>
   );

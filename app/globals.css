@@ -44,6 +44,27 @@ body {
 .header {
   text-align: center;
   margin-bottom: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Support Button */
+.support-btn {
+  align-self: center;
+}
+
+@media (min-width: 640px) {
+  .header {
+    position: relative;
+  }
+
+  .support-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin-bottom: 0 !important;
+  }
 }
 
 .title {
@@ -86,8 +107,13 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* Preview Player Bar */
@@ -96,7 +122,11 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.15) 0%,
+    rgba(168, 85, 247, 0.15) 100%
+  );
   border: 1px solid rgba(99, 102, 241, 0.3);
   border-radius: 12px;
   padding: 0.75rem 1rem;
@@ -484,7 +514,11 @@ body {
 }
 
 .merged-card {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(34, 197, 94, 0.1) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.1) 0%,
+    rgba(34, 197, 94, 0.1) 100%
+  );
   border: 1px solid rgba(99, 102, 241, 0.3);
   border-radius: 12px;
   padding: 1.25rem;

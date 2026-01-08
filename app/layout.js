@@ -19,7 +19,7 @@ const pacifico = Pacifico({
 
 export const metadata = {
   title: "Free Text to Speech | Neural TTS - Unlimited Characters",
-  description: "Convert text to speech for FREE using premium Neural voices. Unlimited characters, parallel processing, multiple voice styles. Perfect for audiobooks, podcasts, and narration. No API key required!",
+  description: "Convert text to speech for FREE using premium Neural voices. Unlimited characters, Fast processing, multiple voice styles. Perfect for audiobooks, podcasts, and narration. No API key required!",
   keywords: "text to speech, TTS, free TTS, neural voices, audiobook generator, speech synthesis, voice generator, narrator voice, podcast TTS, AI voice",
   authors: [{ name: "TTS Generator" }],
   openGraph: {

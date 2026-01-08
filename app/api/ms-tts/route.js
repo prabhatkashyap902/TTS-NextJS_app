@@ -14,15 +14,12 @@ const VOICES = {
   "en-AU-WilliamNeural": { name: "William", gender: "Male", style: "🎙️ Australian Deep", lang: "en-AU", featured: true, category: "narrator" },
   
   // ===== MULTILINGUAL DEEP VOICES =====
-  "en-US-AdamMultilingualNeural": { name: "Adam (Multi)", gender: "Male", style: "🎙️ Deep Engaging", lang: "en-US", featured: true, category: "narrator" },
-  "en-US-AndrewMultilingualNeural": { name: "Andrew (Multi)", gender: "Male", style: "🎙️ Warm Engaging", lang: "en-US", featured: true, category: "narrator" },
-  "en-US-BrianMultilingualNeural": { name: "Brian (Multi)", gender: "Male", style: "🎙️ Versatile", lang: "en-US", featured: true, category: "narrator" },
+  "en-US-AndrewMultilingualNeural": { name: "Andrew", gender: "Male", style: "🎙️ Warm Engaging", lang: "en-US", featured: true, category: "narrator" },
+  "en-US-BrianMultilingualNeural": { name: "Brian", gender: "Male", style: "🎙️ Versatile", lang: "en-US", featured: true, category: "narrator" },
   
   // ===== FEMALE NARRATOR VOICES =====
   "en-US-AriaNeural": { name: "Aria", gender: "Female", style: "🎙️ Natural Narrator", lang: "en-US", featured: true, category: "narrator" },
   "en-US-JennyNeural": { name: "Jenny", gender: "Female", style: "🎙️ Warm Storyteller", lang: "en-US", featured: true, category: "narrator" },
-  "en-US-SaraNeural": { name: "Sara", gender: "Female", style: "🎙️ Calm Narrator", lang: "en-US", featured: true, category: "narrator" },
-  "en-US-NancyNeural": { name: "Nancy", gender: "Female", style: "🎙️ Professional", lang: "en-US", featured: true, category: "narrator" },
   "en-GB-SoniaNeural": { name: "Sonia", gender: "Female", style: "🎙️ British", lang: "en-GB", featured: true, category: "narrator" },
   "en-US-MichelleNeural": { name: "Michelle", gender: "Female", style: "🎙️ Warm", lang: "en-US", featured: true, category: "narrator" },
   
@@ -35,18 +32,12 @@ const VOICES = {
   
   // ===== CONVERSATIONAL / CASUAL =====
   "en-US-AnaNeural": { name: "Ana", gender: "Female", style: "💬 Young Friendly", lang: "en-US", category: "casual" },
-  "en-US-CoraNeural": { name: "Cora", gender: "Female", style: "💬 Friendly", lang: "en-US", category: "casual" },
-  "en-US-AmberNeural": { name: "Amber", gender: "Female", style: "💬 Casual", lang: "en-US", category: "casual" },
-  "en-US-JacobNeural": { name: "Jacob", gender: "Male", style: "💬 Friendly Male", lang: "en-US", category: "casual" },
   "en-GB-LibbyNeural": { name: "Libby", gender: "Female", style: "💬 British Casual", lang: "en-GB", category: "casual" },
   "en-GB-MiaNeural": { name: "Mia", gender: "Female", style: "💬 British Young", lang: "en-GB", category: "casual" },
-  "en-AU-CarlyNeural": { name: "Carly", gender: "Female", style: "💬 Australian", lang: "en-AU", category: "casual" },
   
-  // ===== INDIAN ENGLISH & HINDI =====
+  // ===== INDIAN ENGLISH =====
   "en-IN-PrabhatNeural": { name: "Prabhat", gender: "Male", style: "🇮🇳 Indian Male", lang: "en-IN", category: "indian" },
   "en-IN-NeerjaNeural": { name: "Neerja", gender: "Female", style: "🇮🇳 Indian Female", lang: "en-IN", category: "indian" },
-  "hi-IN-MadhurNeural": { name: "Madhur", gender: "Male", style: "🇮🇳 Hindi Male", lang: "hi-IN", category: "hindi" },
-  "hi-IN-SwaraNeural": { name: "Swara", gender: "Female", style: "🇮🇳 Hindi Female", lang: "hi-IN", category: "hindi" },
   
   // ===== OTHER ENGLISH VARIANTS =====
   "en-CA-LiamNeural": { name: "Liam", gender: "Male", style: "🍁 Canadian", lang: "en-CA", category: "other" },
