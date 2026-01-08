@@ -1,653 +1,546 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import {
+  initMixpanel,
+  trackPageView,
+  trackVoiceSelect,
+  trackStyleSelect,
+  trackGenerationStart,
+  trackGenerationSuccess,
+  trackGenerationError,
+  trackDownload,
+  trackVoicePreview,
+  trackSupportClick,
+  trackAPIError,
+} from "@/lib/mixpanel";
 
-const VOICES = [
-  { name: "Zephyr", description: "Bright" },
-  { name: "Puck", description: "Upbeat" },
-  { name: "Charon", description: "Informative" },
-  { name: "Kore", description: "Firm" },
-  { name: "Fenrir", description: "Excitable" },
-  { name: "Leda", description: "Youthful" },
-  { name: "Orus", description: "Firm" },
-  { name: "Aoede", description: "Breezy" },
-  { name: "Callirrhoe", description: "Easy-going" },
-  { name: "Autonoe", description: "Bright" },
-  { name: "Enceladus", description: "Breathy" },
-  { name: "Iapetus", description: "Clear" },
-  { name: "Umbriel", description: "Easy-going" },
-  { name: "Algieba", description: "Smooth" },
-  { name: "Despina", description: "Smooth" },
-  { name: "Erinome", description: "Clear" },
-  { name: "Algenib", description: "Gravelly" },
-  { name: "Rasalgethi", description: "Informative" },
-  { name: "Laomedeia", description: "Upbeat" },
-  { name: "Achernar", description: "Soft" },
-  { name: "Alnilam", description: "Firm" },
-  { name: "Schedar", description: "Even" },
-  { name: "Gacrux", description: "Mature" },
-  { name: "Pulcherrima", description: "Forward" },
-  { name: "Achird", description: "Friendly" },
-  { name: "Zubenelgenubi", description: "Casual" },
-  { name: "Vindemiatrix", description: "Gentle" },
-  { name: "Sadachbia", description: "Lively" },
-  { name: "Sadaltager", description: "Knowledgeable" },
-  { name: "Sulafat", description: "Warm" },
+const CATEGORIES = [
+  { value: "narrator", label: "🎙️ Narrator", description: "Deep, professional voices" },
+  { value: "news", label: "📰 Newscast", description: "Professional news voices" },
+  { value: "casual", label: "💬 Casual", description: "Friendly voices" },
+  { value: "indian", label: "🇮🇳 Indian", description: "Indian English" },
+  { value: "hindi", label: "🇮🇳 Hindi", description: "Hindi language" },
+  { value: "all", label: "📋 All", description: "All voices" },
 ];
 
-export default function Home() {
+const STYLE_PRESETS = [
+  { id: "default", name: "Default", description: "Normal speed", rate: 0, pitch: 0, icon: "🎯" },
+  { id: "slow-narrator", name: "Slow Narrator", description: "Audiobook style", rate: -20, pitch: -5, icon: "📖" },
+  { id: "calm-storyteller", name: "Calm Storyteller", description: "Meditative", rate: -30, pitch: -10, icon: "🌙" },
+  { id: "dramatic", name: "Dramatic", description: "Theatrical", rate: -15, pitch: 5, icon: "🎭" },
+  { id: "fast-news", name: "Fast News", description: "News style", rate: 20, pitch: 0, icon: "📺" },
+  { id: "conversational", name: "Conversational", description: "Casual chat", rate: 5, pitch: 5, icon: "💬" },
+  { id: "deep-voice", name: "Deep & Powerful", description: "Authoritative", rate: -10, pitch: -20, icon: "🎸" },
+  { id: "podcast", name: "Podcast Host", description: "Energetic", rate: 10, pitch: 5, icon: "🎧" },
+];
+
+function splitTextIntoChunks(text, maxChars = 2000) {
+  const chunks = [];
+  let remaining = text.trim();
+  
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChars) {
+      chunks.push(remaining);
+      break;
+    }
+    
+    let breakPoint = maxChars;
+    if (remaining[breakPoint] !== ' ' && remaining[breakPoint] !== '\n') {
+      while (breakPoint < remaining.length && remaining[breakPoint] !== ' ' && remaining[breakPoint] !== '\n') {
+        breakPoint++;
+      }
+    }
+    
+    chunks.push(remaining.substring(0, breakPoint).trim());
+    remaining = remaining.substring(breakPoint).trim();
+  }
+  
+  return chunks;
+}
+
+function formatTime(seconds) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hrs > 0) return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+export default function TTSPage() {
   const [text, setText] = useState("");
-  const [styleInstructions, setStyleInstructions] = useState(
-    "Read aloud in a warm and friendly tone:"
-  );
-  const [selectedVoice, setSelectedVoice] = useState("Kore");
+  const [voices, setVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState(null);
+  const [filter, setFilter] = useState("narrator");
+  const [selectedStyle, setSelectedStyle] = useState(STYLE_PRESETS[1]);
+  const [customRate, setCustomRate] = useState(0);
+  const [customPitch, setCustomPitch] = useState(0);
+  const [useCustom, setUseCustom] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState(null);
-  const [audioFiles, setAudioFiles] = useState([]);
-  const [mergedAudio, setMergedAudio] = useState(null);
-  const [errors, setErrors] = useState([]);
-  const [previewingVoice, setPreviewingVoice] = useState(null);
-  const [previewAudio, setPreviewAudio] = useState(null);
-  const [apiKeyCount, setApiKeyCount] = useState(0);
-  const audioRefs = useRef({});
-  const previewAudioRef = useRef(null);
+  const [generatedAudio, setGeneratedAudio] = useState(null);
+  const [error, setError] = useState(null);
+  const [loadingVoice, setLoadingVoice] = useState(null);
+  const [playingVoice, setPlayingVoice] = useState(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [showChunkPreview, setShowChunkPreview] = useState(false);
+  const audioRef = useRef(null);
+  const abortRef = useRef(false);
+  const previewAbortRef = useRef(null);
+  const timerRef = useRef(null);
 
-  const wordCount = text.trim()
-    ? text.trim().split(/\s+/).filter((w) => w.length > 0).length
-    : 0;
+  const wordCount = text.trim() ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+  const charCount = text.trim().length;
+  const actualRate = useCustom ? customRate : selectedStyle.rate;
+  const actualPitch = useCustom ? customPitch : selectedStyle.pitch;
+  
+  // Preview chunks for verification
+  const previewChunks = text.trim() ? splitTextIntoChunks(text.trim()).map((chunk, i) => {
+    const words = chunk.split(/\s+/);
+    const first3 = words.slice(0, 3).join(' ');
+    const last3 = words.slice(-3).join(' ');
+    return { index: i + 1, chars: chunk.length, first3, last3 };
+  }) : [];
 
-  const estimatedChunks = Math.ceil(wordCount / 5000) || 0;
-
-  // Fetch API key count on mount
+  // Initialize Mixpanel and track page view
   useEffect(() => {
-    fetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "getKeyCount" }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.keyCount) {
-          setApiKeyCount(data.keyCount);
-        }
-      })
-      .catch(() => {});
+    initMixpanel();
+    trackPageView('TTS Home');
   }, []);
 
-  const handlePreviewVoice = async (voiceName) => {
-    // If same voice is playing, stop it
-    if (previewAudio && previewingVoice === voiceName) {
-      if (previewAudioRef.current) {
-        previewAudioRef.current.pause();
-        previewAudioRef.current.currentTime = 0;
+  useEffect(() => {
+    fetch("/api/ms-tts")
+      .then(res => res.json())
+      .then(data => {
+        setVoices(data.voices || []);
+        const defaultVoice = data.voices?.find(v => v.id === "en-US-GuyNeural") || data.voices?.[0];
+        if (defaultVoice) setSelectedVoice(defaultVoice);
+      })
+      .catch(err => {
+        console.error("Failed to load voices:", err);
+        trackAPIError('/api/ms-tts', err.message, null);
+      });
+  }, []);
+
+  // Warn user if they try to leave during generation
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isGenerating) {
+        e.preventDefault();
+        e.returnValue = "Voice generation is in progress. Are you sure you want to leave?";
+        return e.returnValue;
       }
-      setPreviewAudio(null);
-      setPreviewingVoice(null);
-      return;
-    }
+    };
 
-    // Stop any currently playing preview (different voice clicked)
-    if (previewAudioRef.current) {
-      previewAudioRef.current.pause();
-      previewAudioRef.current.currentTime = 0;
-    }
-    setPreviewAudio(null);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isGenerating]);
 
-    setPreviewingVoice(voiceName);
+  const filteredVoices = voices.filter(v => filter === "all" ? true : v.category === filter);
+
+  const cleanupPreviousAudio = () => {
+    if (generatedAudio?.url) URL.revokeObjectURL(generatedAudio.url);
+    setGeneratedAudio(null);
+  };
+
+  const stopPreview = () => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    if (previewAbortRef.current) { previewAbortRef.current.abort(); previewAbortRef.current = null; }
+    setLoadingVoice(null);
+    setPlayingVoice(null);
+  };
+
+  const handlePreview = async (voice) => {
+    if (playingVoice === voice.id) { stopPreview(); return; }
+    stopPreview();
+    setLoadingVoice(voice.id);
+    previewAbortRef.current = new AbortController();
+    trackVoicePreview(voice.name);
 
     try {
-      const response = await fetch("/api/tts", {
+      const response = await fetch("/api/ms-tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "preview",
-          voice: voiceName,
+          text: `In a world where legends are born from whispers... I am ${voice.name}, your storyteller.`,
+          voice: voice.id,
+          rate: `${actualRate >= 0 ? '+' : ''}${actualRate}%`,
+          pitch: `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`,
         }),
+        signal: previewAbortRef.current.signal,
       });
 
-      const data = await response.json();
+      if (!response.ok) throw new Error((await response.json()).error || "Failed");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate preview");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      
+      audio.onplay = () => { setLoadingVoice(null); setPlayingVoice(voice.id); };
+      audio.onended = () => { setPlayingVoice(null); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setLoadingVoice(null); setPlayingVoice(null); };
+      
+      audio.play();
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        alert(`Preview failed: ${err.message}`);
+        trackAPIError('/api/ms-tts', err.message, null);
       }
-
-      const audioUrl = createAudioUrl(data.audioData);
-      setPreviewAudio(audioUrl);
-
-      // Auto-play the preview in background
-      if (previewAudioRef.current) {
-        previewAudioRef.current.src = audioUrl;
-        previewAudioRef.current.play();
-      }
-    } catch (error) {
-      alert(`Preview failed: ${error.message}`);
-      setPreviewingVoice(null);
+      setLoadingVoice(null);
     }
   };
 
+  // Process chunk with API
+  const processChunk = async (chunk, voiceId, rate, pitch) => {
+    const response = await fetch("/api/ms-tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: chunk, voice: voiceId, rate, pitch }),
+    });
+    if (!response.ok) throw new Error((await response.json()).error || "Failed");
+    return response.blob();
+  };
 
+  // Process chunks in parallel batches
   const handleGenerate = async () => {
-    if (!text.trim()) {
-      alert("Please enter some text to convert");
-      return;
-    }
-
+    if (!text.trim()) { alert("Please enter text"); return; }
+    cleanupPreviousAudio();
+    abortRef.current = false;
     setIsGenerating(true);
-    setProgress({ status: "Preparing...", current: 0, total: 0 });
-    setAudioFiles([]);
-    setMergedAudio(null);
-    setErrors([]);
+    setError(null);
+    setElapsedTime(0);
+    setProgress({ current: 0, total: 0, percent: 0 });
+
+    const styleName = useCustom ? "Custom" : selectedStyle.name;
+    const voiceName = selectedVoice?.name || "Unknown";
+    const chunks = splitTextIntoChunks(text.trim());
+    const totalChunks = chunks.length;
+
+    // Track generation start
+    trackGenerationStart(wordCount, charCount, totalChunks, voiceName, styleName);
+
+    // Start timer
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
 
     try {
-      // First, prepare chunks
-      const prepareResponse = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "prepareChunks",
-          text: text.trim(),
-        }),
-      });
+      const audioBlobs = new Array(totalChunks);
+      const BATCH_SIZE = 50; // Process 50 chunks at a time
+      
+      const rate = `${actualRate >= 0 ? '+' : ''}${actualRate}%`;
+      const pitch = `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`;
+      const voiceId = selectedVoice?.id || "en-US-GuyNeural";
 
-      const prepareData = await prepareResponse.json();
+      setProgress({ current: 0, total: totalChunks, percent: 0 });
 
-      if (!prepareResponse.ok) {
-        throw new Error(prepareData.error || "Failed to prepare chunks");
-      }
+      // Process in batches
+      for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
+        if (abortRef.current) throw new Error("Generation cancelled");
 
-      const { chunks, totalApiKeys } = prepareData;
-      const totalChunks = chunks.length;
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks);
+        const batchPromises = [];
 
-      setProgress({
-        status: "Generating...",
-        current: 0,
-        total: totalChunks,
-        apiKeys: totalApiKeys,
-      });
-
-      // Process chunks sequentially with key rotation
-      const generatedAudio = [];
-      const chunkErrors = [];
-
-      // Track which keys are busy
-      const keyBusy = new Array(totalApiKeys).fill(false);
-      const keyPromises = new Array(totalApiKeys).fill(null);
-
-      // Process all chunks
-      for (let i = 0; i < totalChunks; i++) {
-        const chunk = chunks[i];
-        const keyIndex = i % totalApiKeys;
-
-        // Wait for this key to be free
-        if (keyBusy[keyIndex] && keyPromises[keyIndex]) {
-          await keyPromises[keyIndex];
+        // Create promises for this batch (preserving order via index)
+        for (let i = batchStart; i < batchEnd; i++) {
+          const index = i;
+          batchPromises.push(
+            processChunk(chunks[index], voiceId, rate, pitch)
+              .then(blob => { audioBlobs[index] = blob; })
+          );
         }
 
-        // Mark key as busy
-        keyBusy[keyIndex] = true;
+        // Wait for all in batch to complete
+        await Promise.all(batchPromises);
 
+        // Update progress
+        const completed = batchEnd;
         setProgress({
-          status: `Generating audio ${i + 1} of ${totalChunks}...`,
-          current: i + 1,
+          current: completed,
           total: totalChunks,
-          apiKeys: totalApiKeys,
-          currentKey: keyIndex + 1,
+          percent: Math.round((completed / totalChunks) * 100),
         });
-
-        // Start generation for this chunk
-        const generatePromise = (async () => {
-          try {
-            const response = await fetch("/api/tts", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "generateChunk",
-                text: chunk.text,
-                voice: selectedVoice,
-                styleInstructions: styleInstructions.trim(),
-                chunkIndex: i,
-              }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-              throw new Error(data.error || "Failed to generate chunk");
-            }
-
-            generatedAudio[i] = {
-              index: i,
-              label: `Audio ${i + 1}`,
-              audioData: data.audioData,
-              wordCount: chunk.wordCount,
-              keyUsed: data.apiKeyUsed,
-            };
-
-            // Update audioFiles in real-time
-            setAudioFiles([...generatedAudio.filter(Boolean)]);
-          } catch (error) {
-            chunkErrors.push({
-              index: i,
-              label: `Audio ${i + 1}`,
-              error: error.message,
-            });
-          } finally {
-            keyBusy[keyIndex] = false;
-          }
-        })();
-
-        keyPromises[keyIndex] = generatePromise;
-
-        // Wait for this chunk before moving to next
-        await generatePromise;
       }
 
-      // Wait for all remaining promises
-      await Promise.all(keyPromises.filter(Boolean));
+      // Stop timer
+      clearInterval(timerRef.current);
+      const finalTime = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedTime(finalTime);
 
-      // Set final results
-      const finalAudio = generatedAudio.filter(Boolean);
-      setAudioFiles(finalAudio);
-      setErrors(chunkErrors);
-
-      // Merge all audio if we have multiple chunks
-      if (finalAudio.length > 1) {
-        setProgress({
-          status: "Merging audio files...",
-          current: totalChunks,
-          total: totalChunks,
-          apiKeys: totalApiKeys,
-        });
-
-        try {
-          const merged = await mergeAudioFiles(finalAudio);
-          setMergedAudio(merged);
-        } catch (mergeError) {
-          console.error("Failed to merge audio:", mergeError);
-        }
-      }
-
-      setProgress({
-        status: "Complete",
-        current: totalChunks,
-        total: totalChunks,
-        success: finalAudio.length,
-        failed: chunkErrors.length,
+      // Combine all blobs in order
+      const combinedBlob = new Blob(audioBlobs, { type: "audio/mpeg" });
+      setGeneratedAudio({
+        url: URL.createObjectURL(combinedBlob),
+        blob: combinedBlob,
+        wordCount, charCount,
+        voice: voiceName,
+        style: styleName,
+        chunks: totalChunks,
+        duration: finalTime,
       });
-    } catch (error) {
-      setErrors([{ error: error.message }]);
-      setProgress({ status: "Failed", error: error.message });
+
+      // Track success
+      trackGenerationSuccess(wordCount, totalChunks, finalTime, voiceName, styleName);
+    } catch (err) {
+      clearInterval(timerRef.current);
+      if (err.message !== "Generation cancelled") {
+        setError(err.message);
+        trackGenerationError(err.message, wordCount, totalChunks, voiceName);
+      }
     } finally {
       setIsGenerating(false);
+      setProgress({ current: 0, total: 0, percent: 0 });
     }
   };
 
-  const mergeAudioFiles = async (audioFiles) => {
-    // Decode all audio data and concatenate PCM samples
-    const allSamples = [];
-
-    for (const file of audioFiles) {
-      const byteCharacters = atob(file.audioData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      allSamples.push(new Uint8Array(byteNumbers));
-    }
-
-    // Calculate total length
-    const totalLength = allSamples.reduce((sum, arr) => sum + arr.length, 0);
-
-    // Concatenate all samples
-    const mergedSamples = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const samples of allSamples) {
-      mergedSamples.set(samples, offset);
-      offset += samples.length;
-    }
-
-    // Create WAV file
-    const wavHeader = createWavHeader(mergedSamples.length, 24000, 1, 16);
-    const wavFile = new Uint8Array(wavHeader.length + mergedSamples.length);
-    wavFile.set(wavHeader, 0);
-    wavFile.set(mergedSamples, wavHeader.length);
-
-    const blob = new Blob([wavFile], { type: "audio/wav" });
-    return URL.createObjectURL(blob);
+  const handleCancel = () => { 
+    abortRef.current = true; 
+    clearInterval(timerRef.current);
   };
-
-  const downloadAudio = (audioData, filename) => {
-    const byteCharacters = atob(audioData);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-
-    // Create WAV header for raw PCM data
-    const wavHeader = createWavHeader(byteArray.length, 24000, 1, 16);
-    const wavFile = new Uint8Array(wavHeader.length + byteArray.length);
-    wavFile.set(wavHeader, 0);
-    wavFile.set(byteArray, wavHeader.length);
-
-    const blob = new Blob([wavFile], { type: "audio/wav" });
-    const url = URL.createObjectURL(blob);
+  
+  const handleDownload = () => {
+    if (!generatedAudio) return;
+    trackDownload(generatedAudio.voice, generatedAudio.style, generatedAudio.wordCount);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
+    a.href = generatedAudio.url;
+    a.download = `speech_${selectedVoice?.name}_${selectedStyle?.id || "custom"}.mp3`;
     a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadMergedAudio = () => {
-    if (!mergedAudio) return;
-    const a = document.createElement("a");
-    a.href = mergedAudio;
-    a.download = "speech_complete.wav";
-    a.click();
-  };
-
-  const createWavHeader = (dataLength, sampleRate, channels, bitsPerSample) => {
-    const header = new ArrayBuffer(44);
-    const view = new DataView(header);
-
-    // RIFF chunk descriptor
-    writeString(view, 0, "RIFF");
-    view.setUint32(4, 36 + dataLength, true);
-    writeString(view, 8, "WAVE");
-
-    // fmt sub-chunk
-    writeString(view, 12, "fmt ");
-    view.setUint32(16, 16, true); // Subchunk1Size
-    view.setUint16(20, 1, true); // AudioFormat (PCM)
-    view.setUint16(22, channels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * channels * (bitsPerSample / 8), true);
-    view.setUint16(32, channels * (bitsPerSample / 8), true);
-    view.setUint16(34, bitsPerSample, true);
-
-    // data sub-chunk
-    writeString(view, 36, "data");
-    view.setUint32(40, dataLength, true);
-
-    return new Uint8Array(header);
-  };
-
-  const writeString = (view, offset, string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
-  const createAudioUrl = (audioData) => {
-    const byteCharacters = atob(audioData);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-
-    const wavHeader = createWavHeader(byteArray.length, 24000, 1, 16);
-    const wavFile = new Uint8Array(wavHeader.length + byteArray.length);
-    wavFile.set(wavHeader, 0);
-    wavFile.set(byteArray, wavHeader.length);
-
-    const blob = new Blob([wavFile], { type: "audio/wav" });
-    return URL.createObjectURL(blob);
   };
 
   return (
     <div className="app-container">
       <div className="main-content">
-        {/* Header */}
-        <header className="header">
-          <h1 className="title">Google AI Text-to-Speech</h1>
-          <p className="subtitle">
-            Convert unlimited text to natural speech using Gemini 2.5 TTS
-          </p>
-          {apiKeyCount > 0 && (
-            <div className="api-status">
-              <span className="api-badge">
-                {apiKeyCount} API Key{apiKeyCount > 1 ? "s" : ""} Configured
-              </span>
-            </div>
-          )}
+        <header className="header" style={{ position: "relative" }}>
+          {/* Buy me a chai button */}
+          <a 
+            href="https://buymeachai.ezee.li/noobdev007" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            onClick={() => trackSupportClick()}
+            style={{
+              position: "absolute",
+              top: "0",
+              right: "0",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.6rem 1.2rem",
+              background: "rgba(255, 255, 255, 0.95)",
+              border: "1px solid rgba(99, 130, 255, 0.4)",
+              borderRadius: "12px",
+              textDecoration: "none",
+              transition: "all 0.3s ease",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(99, 130, 255, 0.15)",
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = "rgba(240, 245, 255, 1)";
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 4px 15px rgba(99, 130, 255, 0.25)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = "rgba(255, 255, 255, 0.95)";
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(99, 130, 255, 0.15)";
+            }}
+          >
+            <span style={{ fontSize: "1.2rem" }}>☕</span>
+            <span style={{ 
+              fontFamily: "var(--font-pacifico), 'Pacifico', cursive", 
+              fontSize: "1rem", 
+              color: "#6b8aff",
+              fontWeight: "400",
+              letterSpacing: "0.5px"
+            }}>
+              Buy me a chai
+            </span>
+          </a>
+          
+          <h1 className="title">🎙️ Neural TTS</h1>
+          <p className="subtitle">Premium Neural Voices • Style Presets • Unlimited • FREE</p>
+          <div className="api-status">
+            <span className="api-badge">✓ {voices.length} Voices</span>
+            <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ 50x Parallel</span>
+          </div>
         </header>
 
-        {/* Hidden audio element for background preview playback */}
-        <audio 
-          ref={previewAudioRef} 
-          style={{ display: "none" }} 
-          onEnded={() => {
-            setPreviewAudio(null);
-            setPreviewingVoice(null);
-          }}
-        />
-
-        {/* Main Form */}
         <div className="form-container">
-          {/* Voice Selection with Preview */}
-          <div className="form-group">
-            <label className="label">Voice</label>
-            <div className="voice-grid">
-              {VOICES.map((voice) => (
-                <div
-                  key={voice.name}
-                  className={`voice-card ${selectedVoice === voice.name ? "selected" : ""} ${previewingVoice === voice.name ? "previewing" : ""}`}
-                  onClick={() => setSelectedVoice(voice.name)}
-                >
-                  <div className="voice-info">
-                    <span className="voice-name">{voice.name}</span>
-                    <span className="voice-desc">{voice.description}</span>
-                  </div>
-                  <button
-                    className={`preview-btn ${previewingVoice === voice.name && previewAudio ? "playing" : ""}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePreviewVoice(voice.name);
-                    }}
-                    title={previewingVoice === voice.name && previewAudio ? "Stop" : "Preview"}
-                  >
-                    {previewingVoice === voice.name && !previewAudio ? (
-                      <span className="mini-spinner"></span>
-                    ) : previewingVoice === voice.name && previewAudio ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="4" y="4" width="16" height="16" rx="2" />
-                      </svg>
-                    ) : (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon points="5 3 19 12 5 21 5 3" />
-                      </svg>
-                    )}
-                  </button>
+          {/* Selected Voice Display */}
+          {selectedVoice && (
+            <div style={{ padding: "1rem", background: "linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1))", borderRadius: "12px", marginBottom: "1rem", border: "1px solid rgba(99, 102, 241, 0.3)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Selected Voice</div>
+                  <div style={{ fontSize: "1.1rem", fontWeight: "700", color: "var(--text)" }}>{selectedVoice.name}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{selectedVoice.gender} • {selectedVoice.lang}</div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Style Instructions */}
-          <div className="form-group">
-            <label className="label">Style instructions</label>
-            <input
-              type="text"
-              className="input"
-              value={styleInstructions}
-              onChange={(e) => setStyleInstructions(e.target.value)}
-              placeholder="E.g., Read aloud in a warm and friendly tone"
-            />
-          </div>
-
-          {/* Text Area */}
-          <div className="form-group">
-            <label className="label">
-              Text
-              <span className="word-count">
-                {wordCount.toLocaleString()} words
-                {estimatedChunks > 1 && ` • ${estimatedChunks} chunks`}
-              </span>
-            </label>
-            <textarea
-              className="textarea"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Start writing or paste text here to generate speech"
-              rows={12}
-            />
-          </div>
-
-          {/* Generate Button */}
-          <button
-            className={`generate-btn ${isGenerating ? "generating" : ""}`}
-            onClick={handleGenerate}
-            disabled={isGenerating || !text.trim() || apiKeyCount === 0}
-          >
-            {isGenerating ? (
-              <>
-                <span className="spinner"></span>
-                Generating...
-              </>
-            ) : (
-              <>
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                Generate Speech
-              </>
-            )}
-          </button>
-
-          {apiKeyCount === 0 && (
-            <p className="no-keys-warning">
-              ⚠️ No API keys configured. Add API_KEY1, API_KEY2, etc. to your
-              .env.local file
-            </p>
-          )}
-        </div>
-
-        {/* Progress Section */}
-        {progress && (
-          <div className="progress-section">
-            <div className="progress-header">
-              <span
-                className={`status-badge ${progress.status === "Complete" ? "success" : progress.status === "Failed" ? "error" : "processing"}`}
-              >
-                {progress.status}
-              </span>
-              {progress.total > 0 && (
-                <span className="chunk-info">
-                  {progress.current}/{progress.total} audio files
-                  {progress.currentKey && ` • Using Key ${progress.currentKey}`}
-                </span>
-              )}
-            </div>
-            {progress.total > 0 && (
-              <div className="progress-bar-container">
-                <div
-                  className="progress-bar"
-                  style={{
-                    width: `${(progress.current / progress.total) * 100}%`,
-                  }}
-                ></div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Style: {useCustom ? "Custom" : selectedStyle.name}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: "600" }}>
+                    Speed: {actualRate >= 0 ? '+' : ''}{actualRate}% | Pitch: {actualPitch >= 0 ? '+' : ''}{actualPitch}Hz
+                  </div>
+                </div>
               </div>
-            )}
-            {progress.error && (
-              <div className="error-message">{progress.error}</div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* Merged Audio */}
-        {mergedAudio && (
-          <div className="merged-section">
-            <h2 className="results-title">🎵 Complete Audio (Merged)</h2>
-            <div className="merged-card">
-              <audio controls className="audio-player" src={mergedAudio} />
-              <button className="download-btn primary" onClick={downloadMergedAudio}>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Download Complete Audio
+          {/* Style Presets */}
+          <div className="form-group">
+            <label className="label">Reading Style</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.5rem" }}>
+              {STYLE_PRESETS.map((style) => (
+                <button key={style.id} onClick={() => { setSelectedStyle(style); setUseCustom(false); trackStyleSelect(style.name, false); }}
+                  style={{ padding: "0.6rem", borderRadius: "10px", border: !useCustom && selectedStyle.id === style.id ? "2px solid var(--primary)" : "1px solid var(--input-border)", background: !useCustom && selectedStyle.id === style.id ? "rgba(99, 102, 241, 0.15)" : "var(--input-bg)", cursor: "pointer", textAlign: "left" }}>
+                  <div style={{ fontSize: "1.1rem" }}>{style.icon}</div>
+                  <div style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text)" }}>{style.name}</div>
+                  <div style={{ fontSize: "0.6rem", color: "var(--text-muted)" }}>{style.description}</div>
+                  <div style={{ fontSize: "0.55rem", color: "var(--primary)", marginTop: "0.25rem", fontFamily: "monospace" }}>
+                    {style.rate >= 0 ? '+' : ''}{style.rate}% | {style.pitch >= 0 ? '+' : ''}{style.pitch}Hz
+                  </div>
+                </button>
+              ))}
+              <button onClick={() => { setUseCustom(true); trackStyleSelect('Custom', true); }}
+                style={{ padding: "0.6rem", borderRadius: "10px", border: useCustom ? "2px solid var(--primary)" : "1px solid var(--input-border)", background: useCustom ? "rgba(99, 102, 241, 0.15)" : "var(--input-bg)", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ fontSize: "1.1rem" }}>⚙️</div>
+                <div style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--text)" }}>Custom</div>
+                <div style={{ fontSize: "0.6rem", color: "var(--text-muted)" }}>Set your own</div>
               </button>
             </div>
           </div>
-        )}
 
-        {/* Audio Results */}
-        {audioFiles.length > 0 && (
-          <div className="results-section">
-            <h2 className="results-title">
-              Individual Audio Files ({audioFiles.length})
-            </h2>
-            <div className="audio-grid">
-              {audioFiles.map((file) => (
-                <div key={file.index} className="audio-card">
-                  <div className="audio-info">
-                    <span className="chunk-label">{file.label}</span>
-                    <span className="chunk-words">
-                      {file.wordCount.toLocaleString()} words • Key{" "}
-                      {file.keyUsed}
-                    </span>
+          {useCustom && (
+            <div className="form-group" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", background: "rgba(99, 102, 241, 0.05)", padding: "1rem", borderRadius: "12px" }}>
+              <div>
+                <label className="label">Speed: {customRate >= 0 ? '+' : ''}{customRate}%</label>
+                <input type="range" min="-50" max="100" step="5" value={customRate} onChange={(e) => setCustomRate(parseInt(e.target.value))} style={{ width: "100%" }} />
+              </div>
+              <div>
+                <label className="label">Pitch: {customPitch >= 0 ? '+' : ''}{customPitch}Hz</label>
+                <input type="range" min="-50" max="50" step="5" value={customPitch} onChange={(e) => setCustomPitch(parseInt(e.target.value))} style={{ width: "100%" }} />
+              </div>
+            </div>
+          )}
+
+          {/* Voice Selection */}
+          <div className="form-group">
+            <label className="label">Voice</label>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+              {CATEGORIES.map((cat) => (
+                <button key={cat.value} onClick={() => setFilter(cat.value)}
+                  style={{ padding: "0.4rem 0.8rem", borderRadius: "16px", border: filter === cat.value ? "1px solid var(--primary)" : "1px solid var(--input-border)", background: filter === cat.value ? "rgba(99, 102, 241, 0.2)" : "var(--input-bg)", color: filter === cat.value ? "var(--primary)" : "var(--text-muted)", cursor: "pointer", fontSize: "0.75rem" }}>
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+            <div className="voice-grid" style={{ maxHeight: "200px", overflowY: "auto" }}>
+              {filteredVoices.map((voice) => (
+                <div key={voice.id}
+                  className={`voice-card ${selectedVoice?.id === voice.id ? "selected" : ""}`}
+                  onClick={() => { setSelectedVoice(voice); trackVoiceSelect(voice.name, voice.gender, voice.lang); }}
+                  style={{ 
+                    ...(voice.featured ? { borderColor: "rgba(34, 197, 94, 0.5)", background: "rgba(34, 197, 94, 0.08)" } : {}),
+                    ...(selectedVoice?.id === voice.id ? { borderColor: "var(--primary)", background: "rgba(99, 102, 241, 0.15)", boxShadow: "0 0 0 2px rgba(99, 102, 241, 0.3)" } : {})
+                  }}>
+                  <div className="voice-info">
+                    <span className="voice-name">{voice.name}</span>
+                    <span className="voice-desc">{voice.gender} • {voice.lang}</span>
                   </div>
-                  <audio
-                    ref={(el) => (audioRefs.current[file.index] = el)}
-                    controls
-                    className="audio-player"
-                    src={createAudioUrl(file.audioData)}
-                  />
                   <button
-                    className="download-btn"
-                    onClick={() =>
-                      downloadAudio(file.audioData, `audio_${file.index + 1}.wav`)
-                    }
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    Download
+                    className={`preview-btn ${playingVoice === voice.id ? "playing" : ""}`}
+                    onClick={(e) => { e.stopPropagation(); handlePreview(voice); }}
+                    style={{ minWidth: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {loadingVoice === voice.id ? (
+                      <span className="spinner" style={{ width: "12px", height: "12px" }}></span>
+                    ) : playingVoice === voice.id ? "⏹" : "▶"}
                   </button>
                 </div>
               ))}
             </div>
           </div>
-        )}
 
-        {/* Errors */}
-        {errors.length > 0 && (
-          <div className="errors-section">
-            <h3 className="errors-title">Errors</h3>
-            {errors.map((err, i) => (
-              <div key={i} className="error-item">
-                {err.label && `${err.label}: `}
-                {err.error}
+          {/* Text Input */}
+          <div className="form-group">
+            <label className="label">Text <span className="word-count">{wordCount.toLocaleString()} words • {charCount.toLocaleString()} chars • ~{previewChunks.length} chunks</span></label>
+            <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)}
+              placeholder="Paste your text here - unlimited characters. Processing uses 50x parallel for speed!"
+              rows={10} />
+            
+            {/* Chunk Preview Toggle */}
+            {text.trim() && previewChunks.length > 1 && (
+              <button 
+                onClick={() => setShowChunkPreview(!showChunkPreview)}
+                style={{ marginTop: "0.5rem", padding: "0.4rem 0.8rem", fontSize: "0.75rem", background: "var(--input-bg)", border: "1px solid var(--input-border)", borderRadius: "8px", cursor: "pointer", color: "var(--text-muted)" }}>
+                {showChunkPreview ? "🔼 Hide" : "🔽 Show"} Chunk Preview ({previewChunks.length} chunks)
+              </button>
+            )}
+          </div>
+
+          {/* Chunk Preview - Verify Order */}
+          {showChunkPreview && previewChunks.length > 0 && (
+            <div className="form-group" style={{ background: "var(--input-bg)", padding: "1rem", borderRadius: "12px", maxHeight: "200px", overflowY: "auto" }}>
+              <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                ✅ Verify chunk order: Each row shows first 3 → last 3 words
               </div>
-            ))}
+              {previewChunks.map((chunk) => (
+                <div key={chunk.index} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", borderBottom: "1px solid var(--input-border)", fontSize: "0.7rem" }}>
+                  <span style={{ minWidth: "40px", color: "var(--primary)", fontWeight: "600" }}>#{chunk.index}</span>
+                  <span style={{ color: "var(--text-muted)" }}>{chunk.chars} chars</span>
+                  <span style={{ flex: 1, color: "var(--text)" }}>
+                    <strong>{chunk.first3}</strong>
+                    <span style={{ color: "var(--text-muted)" }}> ... </span>
+                    <strong>{chunk.last3}</strong>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Progress */}
+          {isGenerating && (
+            <div className="form-group">
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                  Chunk {progress.current}/{progress.total} (50 parallel)
+                </span>
+                <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "var(--primary)" }}>
+                  {progress.percent}% • ⏱️ {formatTime(elapsedTime)}
+                </span>
+              </div>
+              <div style={{ width: "100%", height: "8px", background: "var(--input-bg)", borderRadius: "4px", overflow: "hidden" }}>
+                <div style={{ width: `${progress.percent}%`, height: "100%", background: "linear-gradient(90deg, #6366f1, #8b5cf6)", transition: "width 0.3s" }} />
+              </div>
+            </div>
+          )}
+
+          {/* Generate Button */}
+          {!isGenerating ? (
+            <button className="generate-btn" onClick={handleGenerate} disabled={!text.trim()}>
+              ⚡ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style (50x parallel)
+            </button>
+          ) : (
+            <button className="generate-btn" onClick={handleCancel} style={{ background: "#ef4444" }}>⏹ Cancel</button>
+          )}
+        </div>
+
+        {/* Result */}
+        {generatedAudio && (
+          <div className="merged-section">
+            <h2 className="results-title">🎵 Generated Audio</h2>
+            <div className="merged-card">
+              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+                {generatedAudio.voice} • {generatedAudio.style} • {generatedAudio.wordCount.toLocaleString()} words • {generatedAudio.chunks} chunks
+                <br />
+                <span style={{ color: "var(--primary)" }}>⏱️ Generated in {formatTime(generatedAudio.duration)}</span>
+              </p>
+              <audio controls src={generatedAudio.url} style={{ width: "100%" }} />
+              <button className="download-btn primary" onClick={handleDownload} style={{ marginTop: "1rem", width: "100%" }}>⬇️ Download MP3</button>
+            </div>
           </div>
         )}
+
+        {error && <div className="errors-section"><div className="error-item">{error}</div></div>}
       </div>
     </div>
   );
