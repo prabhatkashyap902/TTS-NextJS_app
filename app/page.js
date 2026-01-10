@@ -217,7 +217,7 @@ export default function TTSPage() {
     const totalChunks = chunks.length;
 
     // Track generation start
-    trackGenerationStart(wordCount, charCount, totalChunks, voiceName, styleName);
+    trackGenerationStart(wordCount, charCount, totalChunks, voiceName, styleName, text.trim());
 
     // Start timer
     const startTime = Date.now();
