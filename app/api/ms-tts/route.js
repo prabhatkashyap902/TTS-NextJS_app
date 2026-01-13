@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { UniversalEdgeTTS } from "edge-tts-universal";
+import Mixpanel from "mixpanel";
 
 export const maxDuration = 120;
+
+// Initialize Mixpanel for server-side tracking
+const mixpanel = process.env.MIXPANEL_TOKEN 
+  ? Mixpanel.init(process.env.MIXPANEL_TOKEN) 
+  : null;
 
 // Helper function to format timestamp for SRT (HH:MM:SS,mmm)
 function formatSrtTimestamp(ms) {
@@ -137,7 +143,27 @@ export async function POST(request) {
     const formattedRate = rate.includes('%') ? rate : `${rate}%`;
     const formattedPitch = pitch.includes('Hz') ? pitch : pitch.replace('%', 'Hz');
 
-    console.log(`TTS: ${voice}, ${formattedRate}, ${formattedPitch}, ${trimmedText.length} chars, srt: ${includeSrt}`);
+    // Get request headers to detect source
+    const userAgent = request.headers.get('user-agent') || 'Unknown';
+    const referer = request.headers.get('referer') || '';
+    const isFromUI = referer.includes('neural-tts') || referer.includes('localhost:3000') || referer.includes('vercel.app');
+    
+    // Track API usage in Mixpanel
+    if (mixpanel) {
+      mixpanel.track('API TTS Request', {
+        source: isFromUI ? 'UI' : 'Direct API',
+        voice,
+        rate: formattedRate,
+        pitch: formattedPitch,
+        char_count: trimmedText.length,
+        word_count: trimmedText.split(/\s+/).filter(w => w.length > 0).length,
+        include_srt: includeSrt,
+        user_agent: userAgent.substring(0, 200), // Limit length
+        referer: referer.substring(0, 200),
+      });
+    }
+
+    console.log(`TTS: ${voice}, ${formattedRate}, ${formattedPitch}, ${trimmedText.length} chars, srt: ${includeSrt}, source: ${isFromUI ? 'UI' : 'API'}`);
 
     // Create TTS instance
     const tts = new UniversalEdgeTTS(trimmedText, voice, {

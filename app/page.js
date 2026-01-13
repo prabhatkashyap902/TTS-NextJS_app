@@ -83,6 +83,8 @@ export default function TTSPage() {
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
   const [elapsedTime, setElapsedTime] = useState(0);
   const [generatingSrt, setGeneratingSrt] = useState(false);
+  const [generatedSrt, setGeneratedSrt] = useState(null);
+  const [showPHModal, setShowPHModal] = useState(false);
   const audioRef = useRef(null);
   const abortRef = useRef(false);
   const previewAbortRef = useRef(null);
@@ -190,15 +192,40 @@ export default function TTSPage() {
     }
   };
 
-  // Process chunk with API
+  // Process chunk with API - returns both audio blob and SRT data
   const processChunk = async (chunk, voiceId, rate, pitch) => {
     const response = await fetch("/api/ms-tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: chunk, voice: voiceId, rate, pitch }),
+      body: JSON.stringify({ text: chunk, voice: voiceId, rate, pitch, includeSrt: true }),
     });
     if (!response.ok) throw new Error((await response.json()).error || "Failed");
-    return response.blob();
+    const data = await response.json();
+    
+    // Decode base64 audio to blob
+    const audioBlob = new Blob(
+      [Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))], 
+      { type: 'audio/mpeg' }
+    );
+    
+    // Calculate duration from SRT's last timestamp
+    let duration = 0;
+    if (data.srt) {
+      const blocks = data.srt.trim().split(/\n\n+/);
+      const lastBlock = blocks[blocks.length - 1];
+      if (lastBlock) {
+        const lines = lastBlock.split('\n');
+        if (lines.length >= 2) {
+          const timeMatch = lines[1].match(/\d{2}:\d{2}:\d{2},\d{3} --> (\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+          if (timeMatch) {
+            const [, h, m, s, ms] = timeMatch;
+            duration = parseInt(h) * 3600000 + parseInt(m) * 60000 + parseInt(s) * 1000 + parseInt(ms);
+          }
+        }
+      }
+    }
+    
+    return { audioBlob, srt: data.srt, duration };
   };
 
   // Process chunks in parallel batches
@@ -210,6 +237,7 @@ export default function TTSPage() {
     setError(null);
     setElapsedTime(0);
     setProgress({ current: 0, total: 0, percent: 0 });
+    setGeneratedSrt(null); // Clear previous SRT
 
     const styleName = useCustom ? "Custom" : selectedStyle.name;
     const voiceName = selectedVoice?.name || "Unknown";
@@ -226,8 +254,9 @@ export default function TTSPage() {
     }, 1000);
 
     try {
-      const audioBlobs = new Array(totalChunks);
-      const BATCH_SIZE = 50; // Process 50 chunks at a time
+      // Store both audio and SRT data for each chunk
+      const chunkResults = new Array(totalChunks);
+      const BATCH_SIZE = 50;
       
       const rate = `${actualRate >= 0 ? '+' : ''}${actualRate}%`;
       const pitch = `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`;
@@ -235,31 +264,27 @@ export default function TTSPage() {
 
       setProgress({ current: 0, total: totalChunks, percent: 0 });
 
-      // Process in batches
+      // Process in batches - get both audio AND SRT in one call
       for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
         if (abortRef.current) throw new Error("Generation cancelled");
 
         const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks);
         const batchPromises = [];
 
-        // Create promises for this batch (preserving order via index)
         for (let i = batchStart; i < batchEnd; i++) {
           const index = i;
           batchPromises.push(
             processChunk(chunks[index], voiceId, rate, pitch)
-              .then(blob => { audioBlobs[index] = blob; })
+              .then(result => { chunkResults[index] = result; })
           );
         }
 
-        // Wait for all in batch to complete
         await Promise.all(batchPromises);
 
-        // Update progress
-        const completed = batchEnd;
         setProgress({
-          current: completed,
+          current: batchEnd,
           total: totalChunks,
-          percent: Math.round((completed / totalChunks) * 100),
+          percent: Math.round((batchEnd / totalChunks) * 100),
         });
       }
 
@@ -268,8 +293,35 @@ export default function TTSPage() {
       const finalTime = Math.floor((Date.now() - startTime) / 1000);
       setElapsedTime(finalTime);
 
-      // Combine all blobs in order
+      // Combine all audio blobs in order
+      const audioBlobs = chunkResults.map(r => r.audioBlob);
       const combinedBlob = new Blob(audioBlobs, { type: "audio/mpeg" });
+      
+      // Combine all SRTs with proper timing offsets
+      let combinedSrt = "";
+      let subtitleIndex = 1;
+      let cumulativeOffset = 0;
+
+      for (let i = 0; i < chunkResults.length; i++) {
+        const { srt, duration } = chunkResults[i];
+        if (srt) {
+          const entries = parseSrt(srt);
+          for (const entry of entries) {
+            const startMs = timestampToMs(entry.start) + cumulativeOffset;
+            const endMs = timestampToMs(entry.end) + cumulativeOffset;
+            
+            combinedSrt += `${subtitleIndex}\n`;
+            combinedSrt += `${msToTimestamp(startMs)} --> ${msToTimestamp(endMs)}\n`;
+            combinedSrt += `${entry.text}\n\n`;
+            subtitleIndex++;
+          }
+        }
+        cumulativeOffset += duration;
+      }
+
+      // Store generated SRT
+      setGeneratedSrt(combinedSrt);
+
       setGeneratedAudio({
         url: URL.createObjectURL(combinedBlob),
         blob: combinedBlob,
@@ -308,35 +360,6 @@ export default function TTSPage() {
     a.click();
   };
 
-  // Process a single chunk for SRT generation (returns audio duration + srt data)
-  const processChunkForSrt = async (chunk, voiceId, rate, pitch) => {
-    const response = await fetch("/api/ms-tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: chunk, voice: voiceId, rate, pitch, includeSrt: true }),
-    });
-    if (!response.ok) throw new Error((await response.json()).error || "Failed");
-    const data = await response.json();
-    
-    // Decode base64 audio to get actual duration
-    const audioBlob = new Blob([Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))], { type: 'audio/mpeg' });
-    const audioUrl = URL.createObjectURL(audioBlob);
-    
-    // Get actual audio duration
-    const duration = await new Promise((resolve) => {
-      const audio = new Audio(audioUrl);
-      audio.addEventListener('loadedmetadata', () => {
-        resolve(audio.duration * 1000); // Convert to milliseconds
-        URL.revokeObjectURL(audioUrl);
-      });
-      audio.addEventListener('error', () => {
-        resolve(0);
-        URL.revokeObjectURL(audioUrl);
-      });
-    });
-    
-    return { srt: data.srt, duration };
-  };
 
   // Parse SRT content into structured entries
   const parseSrt = (srtContent) => {
@@ -376,82 +399,17 @@ export default function TTSPage() {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
   };
 
-  // Generate SRT subtitles in parallel chunks and auto-download
-  const handleDownloadSubtitles = async () => {
-    if (!generatedAudio || generatingSrt) return;
-    setGeneratingSrt(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-
-    try {
-      const rate = `${actualRate >= 0 ? '+' : ''}${actualRate}%`;
-      const pitch = `${actualPitch >= 0 ? '+' : ''}${actualPitch}Hz`;
-      const voiceId = selectedVoice?.id || "en-US-GuyNeural";
-      const chunks = splitTextIntoChunks(text.trim());
-      const totalChunks = chunks.length;
-      
-      // Store results with order preserved
-      const results = new Array(totalChunks);
-      const BATCH_SIZE = 50;
-
-      setProgress({ current: 0, total: totalChunks, percent: 0 });
-
-      // Process in batches (parallel within batch)
-      for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
-        const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks);
-        const batchPromises = [];
-
-        for (let i = batchStart; i < batchEnd; i++) {
-          const index = i;
-          batchPromises.push(
-            processChunkForSrt(chunks[index], voiceId, rate, pitch)
-              .then(result => { results[index] = result; })
-          );
-        }
-
-        await Promise.all(batchPromises);
-        setProgress({
-          current: batchEnd,
-          total: totalChunks,
-          percent: Math.round((batchEnd / totalChunks) * 100),
-        });
-      }
-
-      // Combine SRTs with cumulative time offset
-      let combinedSrt = "";
-      let subtitleIndex = 1;
-      let cumulativeOffset = 0;
-
-      for (let i = 0; i < results.length; i++) {
-        const { srt, duration } = results[i];
-        const entries = parseSrt(srt);
-
-        for (const entry of entries) {
-          const startMs = timestampToMs(entry.start) + cumulativeOffset;
-          const endMs = timestampToMs(entry.end) + cumulativeOffset;
-          
-          combinedSrt += `${subtitleIndex}\n`;
-          combinedSrt += `${msToTimestamp(startMs)} --> ${msToTimestamp(endMs)}\n`;
-          combinedSrt += `${entry.text}\n\n`;
-          subtitleIndex++;
-        }
-
-        cumulativeOffset += duration;
-      }
-
-      // Auto-download
-      const blob = new Blob([combinedSrt], { type: 'text/srt' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `subtitles_${selectedVoice?.name}_${selectedStyle?.id || "custom"}.srt`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      alert(`Subtitle generation failed: ${err.message}`);
-    } finally {
-      setGeneratingSrt(false);
-      setProgress({ current: 0, total: 0, percent: 0 });
-    }
+  // Download pre-generated SRT subtitles
+  const handleDownloadSubtitles = () => {
+    if (!generatedSrt) return;
+    
+    const blob = new Blob([generatedSrt], { type: 'text/srt' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `subtitles_${selectedVoice?.name}_${selectedStyle?.id || "custom"}.srt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -507,6 +465,64 @@ export default function TTSPage() {
             <span className="api-badge">✓ {voices.length} Voices</span>
             <span style={{ fontSize: "0.7rem", color: "#22c55e", background: "rgba(34, 197, 94, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "10px", marginLeft: "0.5rem" }}>⚡ Fast</span>
           </div>
+          
+          {/* Product Hunt Badge */}
+          <button
+            onClick={() => setShowPHModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              padding: "0.5rem 1rem",
+              background: "#fff",
+              border: "1px solid #EA532A",
+              borderRadius: "10px",
+              cursor: "pointer",
+              marginTop: "0.75rem",
+              transition: "all 0.2s ease",
+              boxShadow: "0 2px 8px rgba(234, 83, 42, 0.1)",
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.boxShadow = "0 4px 15px rgba(234, 83, 42, 0.2)";
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(234, 83, 42, 0.1)";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            {/* P Logo - Circular */}
+            <div style={{
+              width: "32px",
+              height: "32px",
+              background: "#EA532A",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontWeight: "700",
+              fontSize: "1.1rem",
+            }}>P</div>
+            
+            {/* Text */}
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: "0.65rem", color: "#EA532A", fontWeight: "500", letterSpacing: "0.5px" }}>FIND US ON</div>
+              <div style={{ fontSize: "1rem", color: "#EA532A", fontWeight: "700" }}>Product Hunt</div>
+            </div>
+            
+            {/* Upvotes */}
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              marginLeft: "0.5rem",
+              color: "#EA532A",
+            }}>
+              <span style={{ fontSize: "0.9rem" }}>▲</span>
+              <span style={{ fontSize: "0.85rem", fontWeight: "600" }}>198</span>
+            </div>
+          </button>
           <a 
             href="/subtitles" 
             style={{
@@ -673,36 +689,91 @@ export default function TTSPage() {
                 <button 
                   className="download-btn" 
                   onClick={handleDownloadSubtitles} 
-                  disabled={generatingSrt}
-                  style={{ flex: 1, background: "rgba(99, 102, 241, 0.1)", borderColor: "var(--primary)" }}
+                  disabled={!generatedSrt}
+                  style={{ flex: 1, background: "rgba(99, 102, 241, 0.1)", borderColor: "var(--primary)", opacity: generatedSrt ? 1 : 0.6 }}
                 >
-                  {generatingSrt 
-                    ? `⏳ ${progress.percent > 0 ? `${progress.percent}%` : "Starting..."}` 
-                    : "⬇️ Download Subtitles"}
+                  {generatedSrt ? "⬇️ Download Subtitles" : "⏳ Preparing..."}
                 </button>
               </div>
-              {/* Subtitle Generation Progress */}
-              {generatingSrt && (
-                <div style={{ marginTop: "1rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                      📝 Generating subtitles: {progress.current}/{progress.total} chunks
-                    </span>
-                    <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "var(--primary)" }}>
-                      {progress.percent}%
-                    </span>
-                  </div>
-                  <div style={{ width: "100%", height: "6px", background: "var(--input-bg)", borderRadius: "3px", overflow: "hidden" }}>
-                    <div style={{ width: `${progress.percent}%`, height: "100%", background: "linear-gradient(90deg, #6366f1, #8b5cf6)", transition: "width 0.3s" }} />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
 
         {error && <div className="errors-section"><div className="error-item">{error}</div></div>}
       </div>
+
+      {/* Product Hunt Modal */}
+      {showPHModal && (
+        <div 
+          onClick={() => setShowPHModal(false)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            animation: "fadeIn 0.2s ease",
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              borderRadius: "20px",
+              padding: "2rem",
+              maxWidth: "400px",
+              width: "90%",
+              textAlign: "center",
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+              animation: "slideUp 0.3s ease",
+            }}
+          >
+            <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>😂</div>
+            <h2 style={{ 
+              fontSize: "1.5rem", 
+              fontWeight: "700", 
+              color: "#1a1a2e", 
+              marginBottom: "0.75rem" 
+            }}>
+              Gotcha!
+            </h2>
+            <p style={{ 
+              fontSize: "1rem", 
+              color: "#666", 
+              lineHeight: "1.6",
+              marginBottom: "1.5rem" 
+            }}>
+              Haha, you actually clicked it! 🎉<br/><br/>
+              We haven&apos;t launched on Product Hunt yet... but thanks for the enthusiasm!<br/><br/>
+              <strong style={{ color: "#EA532A" }}>Stay tuned! 🚀</strong>
+            </p>
+            <button
+              onClick={() => setShowPHModal(false)}
+              style={{
+                padding: "0.75rem 2rem",
+                background: "linear-gradient(135deg, #EA532A, #FF6B4A)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+              onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.05)"}
+              onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
+            >
+              Got it! 👍
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
