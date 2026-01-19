@@ -39,13 +39,24 @@ export const metadata = {
   },
 };
 
+import Footer from "./components/Footer";
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+
+      <head>
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4820777307305648"
+          crossOrigin="anonymous"
+        ></script>
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased`}
       >
         {children}
+        <Footer />
       </body>
     </html>
   );

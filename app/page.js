@@ -542,6 +542,26 @@ export default function TTSPage() {
           >
             📝 Get Subtitles Only
           </a>
+          <a 
+            href="/local-tts" 
+            style={{
+              marginTop: "0.75rem",
+              marginLeft: "0.5rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.4rem 0.8rem",
+              background: "rgba(34, 197, 94, 0.1)",
+              border: "1px solid rgba(34, 197, 94, 0.3)",
+              borderRadius: "20px",
+              textDecoration: "none",
+              fontSize: "0.75rem",
+              color: "#22c55e",
+              transition: "all 0.2s ease",
+            }}
+          >
+            💻 Local TTS (Beta)
+          </a>
         </header>
 
         <div className="form-container">
@@ -774,6 +794,65 @@ export default function TTSPage() {
           </div>
         </div>
       )}
+
+      {/* SEO Content Section */}
+      <div style={{
+        marginTop: "4rem",
+        padding: "2rem",
+        background: "#fff",
+        borderRadius: "24px",
+        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+        color: "#1f2937"
+      }}>
+        <section style={{ marginBottom: "3rem" }}>
+          <h2 style={{ fontSize: "1.8rem", fontWeight: "700", color: "#111827", marginBottom: "1rem" }}>
+            Free Unlimited Neural Text to Speech
+          </h2>
+          <p style={{ fontSize: "1.1rem", lineHeight: "1.7", color: "#4b5563" }}>
+            Welcome to the most advanced free Text to Speech (TTS) converter on the web. We use cutting-edge 
+            Neural Network technology to generate 
+            voices that are indistinguishable from human speech. Whether you are a content creator, student, 
+            or just looking to read a book while driving, our tool offers unlimited conversions without any 
+            hidden fees or character limits.
+          </p>
+        </section>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "2rem", marginBottom: "3rem" }}>
+          <div style={{ background: "#f9fafb", padding: "1.5rem", borderRadius: "16px" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: "600", marginBottom: "0.5rem", color: "#4f46e5" }}>⚡ Neural Quality Voices</h3>
+            <p style={{ color: "#6b7280" }}>Access over 47 high-quality English voices including specific styles like News, Customer Service, and Whispering.</p>
+          </div>
+          <div style={{ background: "#f9fafb", padding: "1.5rem", borderRadius: "16px" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: "600", marginBottom: "0.5rem", color: "#4f46e5" }}>♾️ Unlimited Usage</h3>
+            <p style={{ color: "#6b7280" }}>No credit cards, no login required. Generate as much audio as you need. We support long-form text with smart chunking.</p>
+          </div>
+          <div style={{ background: "#f9fafb", padding: "1.5rem", borderRadius: "16px" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: "600", marginBottom: "0.5rem", color: "#4f46e5" }}>🎯 Custom Control</h3>
+            <p style={{ color: "#6b7280" }}>Fine-tune your audio with precise controls for Speed (Rate) and Pitch. Create unique character voices for your projects.</p>
+          </div>
+        </div>
+
+        <section>
+          <h2 style={{ fontSize: "1.8rem", fontWeight: "700", color: "#111827", marginBottom: "1.5rem" }}>
+            Frequently Asked Questions
+          </h2>
+          
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: "600", marginBottom: "0.5rem" }}>Is this really free?</h3>
+            <p style={{ color: "#4b5563" }}>Yes! Our tool is 100% free to use. We are supported by ads and donations from our community.</p>
+          </div>
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: "600", marginBottom: "0.5rem" }}>Can I use the audio for YouTube/Commercial projects?</h3>
+            <p style={{ color: "#4b5563" }}>Generally, yes. The voices are provided by our upstream providers which commonly allow commercial use for generated audio, but we recommend checking specific Terms of Use to be sure.</p>
+          </div>
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h3 style={{ fontSize: "1.2rem", fontWeight: "600", marginBottom: "0.5rem" }}>How do I download the audio?</h3>
+            <p style={{ color: "#4b5563" }}>Once your audio is generated, a "Download MP3" button will appear. Click it to save the file directly to your device.</p>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

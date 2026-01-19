@@ -22,28 +22,45 @@ function formatSrtTimestamp(ms) {
 // Create SRT with grouped words (4-5 words per subtitle)
 // NOTE: The library returns offset and duration in 100-nanosecond units (ticks)
 // We need to convert to milliseconds by dividing by 10,000
-function createGroupedSRT(wordBoundaries, wordsPerGroup = 5) {
+// Create SRT with smarter grouping (based on character count, max ~42 chars per line)
+function createGroupedSRT(wordBoundaries) {
   if (!wordBoundaries || wordBoundaries.length === 0) return "";
   
   let srtContent = "";
   let subtitleIndex = 1;
+  let currentGroup = [];
+  let currentLength = 0;
   
-  for (let i = 0; i < wordBoundaries.length; i += wordsPerGroup) {
-    const groupEnd = Math.min(i + wordsPerGroup, wordBoundaries.length);
-    const group = wordBoundaries.slice(i, groupEnd);
+  for (let i = 0; i < wordBoundaries.length; i++) {
+    const word = wordBoundaries[i];
+    currentGroup.push(word);
+    currentLength += word.text.length + 1; // +1 for space
     
-    if (group.length === 0) continue;
+    // Check if we should break here (limit to ~42 chars or finding punctuation)
+    // Or if it's the last word
+    const isEndOfSentence = /[.!?]/.test(word.text);
+    const isTooLong = currentLength > 40;
+    const isLastWord = i === wordBoundaries.length - 1;
     
-    // Convert from 100-nanosecond units to milliseconds (divide by 10,000)
-    const startTimeMs = Math.floor(group[0].offset / 10000);
-    const lastWord = group[group.length - 1];
-    const endTimeMs = Math.floor((lastWord.offset + lastWord.duration) / 10000);
-    const text = group.map(w => w.text).join(' ');
-    
-    srtContent += `${subtitleIndex}\n`;
-    srtContent += `${formatSrtTimestamp(startTimeMs)} --> ${formatSrtTimestamp(endTimeMs)}\n`;
-    srtContent += `${text}\n\n`;
-    subtitleIndex++;
+    if (isTooLong || isEndOfSentence || isLastWord) {
+        if (currentGroup.length > 0) {
+            // Calculate timing for this group
+            const startTimeMs = Math.floor(currentGroup[0].offset / 10000);
+            const lastWord = currentGroup[currentGroup.length - 1];
+            const endTimeMs = Math.floor((lastWord.offset + lastWord.duration) / 10000);
+            
+            const text = currentGroup.map(w => w.text).join(' ');
+            
+            srtContent += `${subtitleIndex}\n`;
+            srtContent += `${formatSrtTimestamp(startTimeMs)} --> ${formatSrtTimestamp(endTimeMs)}\n`;
+            srtContent += `${text}\n\n`;
+            subtitleIndex++;
+            
+            // Reset
+            currentGroup = [];
+            currentLength = 0;
+        }
+    }
   }
   
   return srtContent;
@@ -87,6 +104,8 @@ const VOICES = {
   "en-IN-PrabhatNeural": { name: "Prabhat", gender: "Male", style: "🇮🇳 Indian Male", lang: "en-IN", category: "indian" },
   "en-IN-NeerjaNeural": { name: "Neerja", gender: "Female", style: "🇮🇳 Indian Female", lang: "en-IN", category: "indian" },
   "en-IN-NeerjaExpressiveNeural": { name: "Neerja Expressive", gender: "Female", style: "🇮🇳 Indian Expressive", lang: "en-IN", category: "indian" },
+  "hi-IN-SwaraNeural": { name: "Swara (Hindi)", gender: "Female", style: "🇮🇳 Hindi Female", lang: "hi-IN", category: "indian" },
+  "hi-IN-MadhurNeural": { name: "Madhur (Hindi)", gender: "Male", style: "🇮🇳 Hindi Male", lang: "hi-IN", category: "indian" },
   
   // ===== CANADIAN VOICES =====
   "en-CA-ClaraNeural": { name: "Clara", gender: "Female", style: "🍁 Canadian", lang: "en-CA", category: "other" },
