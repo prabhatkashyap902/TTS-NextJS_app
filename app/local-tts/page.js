@@ -42,14 +42,14 @@ const KOKORO_VOICES = [
 ];
 
 const STYLE_PRESETS = [
-  { id: "default", name: "Default", description: "Normal speed", speed: 1.0, pitch: 0, icon: "🎯" },
-  { id: "slow-narrator", name: "Slow Narrator", description: "Audiobook style", speed: 0.8, pitch: -60, icon: "📖" },
-  { id: "calm-storyteller", name: "Calm Storyteller", description: "Meditative", speed: 0.7, pitch: -50, icon: "🌙" },
-  { id: "dramatic", name: "Dramatic", description: "Theatrical", speed: 0.9, pitch: 50, icon: "🎭" },
-  { id: "fast-news", name: "Fast News", description: "News style", speed: 1.2, pitch: 0, icon: "📺" },
-  { id: "conversational", name: "Conversational", description: "Casual chat", speed: 1.05, pitch: 50, icon: "💬" },
-  { id: "deep-voice", name: "Deep & Powerful", description: "Authoritative", speed: 0.9, pitch: -200, icon: "🎸" },
-  { id: "podcast", name: "Podcast Host", description: "Energetic", speed: 1.1, pitch: 50, icon: "🎧" },
+  { id: "default", name: "Default", description: "Normal speed", speed: 1.0, pitch: 1.0, icon: "🎯" },
+  { id: "slow-narrator", name: "Slow Narrator", description: "Audiobook style", speed: 0.8, pitch: 0.90, icon: "📖" },
+  { id: "calm-storyteller", name: "Calm Storyteller", description: "Meditative", speed: 0.7, pitch: 0.92, icon: "🌙" },
+  { id: "dramatic", name: "Dramatic", description: "Theatrical", speed: 0.9, pitch: 1.08, icon: "🎭" },
+  { id: "fast-news", name: "Fast News", description: "News style", speed: 1.2, pitch: 1.0, icon: "📺" },
+  { id: "conversational", name: "Conversational", description: "Casual chat", speed: 1.05, pitch: 1.05, icon: "💬" },
+  { id: "deep-voice", name: "Deep & Powerful", description: "Authoritative", speed: 0.9, pitch: 0.75, icon: "🎸" },
+  { id: "podcast", name: "Podcast Host", description: "Energetic", speed: 1.1, pitch: 1.08, icon: "🎧" },
 ];
 
 export default function LocalTTSPage() {
@@ -58,14 +58,16 @@ export default function LocalTTSPage() {
   
   // Audio Settings
   const [speed, setSpeed] = useState(1.0);
-  const [pitch, setPitch] = useState(0); // In cents (-1200 to +1200)
+  const [pitch, setPitch] = useState(1.0); // Pitch multiplier (0.5 to 2.0)
   const [selectedStyle, setSelectedStyle] = useState(STYLE_PRESETS[0]);
   const [isCustomStyle, setIsCustomStyle] = useState(false);
 
   // States
   const [status, setStatus] = useState("idle"); // idle, loading, generating, complete, error
   const [progressItems, setProgressItems] = useState([]);
-  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0, text: '' }); // For 50k char progress
+  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0, text: '' }); // For progress
+  const [elapsedTime, setElapsedTime] = useState(0); // Timer in seconds
+  const timerRef = useRef(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioData, setAudioData] = useState(null); // Store raw audio for replay with FX
   const [error, setError] = useState(null);
@@ -73,6 +75,7 @@ export default function LocalTTSPage() {
   
   // Preview State
   const [previewVoiceId, setPreviewVoiceId] = useState(null);
+  const [playbackState, setPlaybackState] = useState('stopped'); // stopped, playing, paused
   const audioRef = useRef(null);
   
   const worker = useRef(null);
@@ -102,12 +105,65 @@ export default function LocalTTSPage() {
   const audioContextRef = useRef(null);
   const sourceNodeRef = useRef(null);
   
-  // Main Playback Logic
+  // Streaming Audio Queue
+  const audioQueueRef = useRef([]);
+  const isPlayingRef = useRef(false);
+  const currentPlayingIndexRef = useRef(0);
+  
+  // Play next chunk from queue
+  const playNextInQueue = () => {
+      if (audioQueueRef.current.length === 0) {
+          isPlayingRef.current = false;
+          return;
+      }
+      
+      const { audioData, sampleRate } = audioQueueRef.current.shift();
+      const pitchMultiplier = settingsRef.current.pitch;
+      const pitchInCents = Math.round(1200 * Math.log2(pitchMultiplier));
+      
+      if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioContextRef.current;
+      
+      const buffer = ctx.createBuffer(1, audioData.length, sampleRate || 24000);
+      buffer.copyToChannel(audioData, 0);
+      
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      
+      if (source.detune) {
+          source.detune.value = pitchInCents;
+      }
+      
+      source.connect(ctx.destination);
+      source.onended = () => {
+          currentPlayingIndexRef.current++;
+          playNextInQueue(); // Play next chunk when current ends
+      };
+      source.start();
+      sourceNodeRef.current = source;
+      isPlayingRef.current = true;
+  };
+  
+  // Add chunk to queue and start playing if not already
+  const queueAudioChunk = (audioData, sampleRate) => {
+      audioQueueRef.current.push({ audioData, sampleRate });
+      if (!isPlayingRef.current) {
+          playNextInQueue();
+      }
+  };
+  
+  // Main Playback Logic (for complete audio or previews)
   const playAudio = async (audioData, sampleRate, forcedPitch = null) => {
       // Use forcedPitch if provided (e.g. preview), otherwise use current UI setting
-      const pitchToUse = forcedPitch !== null ? forcedPitch : settingsRef.current.pitch;
+      const pitchMultiplier = forcedPitch !== null ? forcedPitch : settingsRef.current.pitch;
       
-      console.log("Playing with pitch:", pitchToUse);
+      // Convert pitch multiplier (0.5-2.0) to cents for AudioContext
+      // Formula: cents = 1200 * log2(multiplier)
+      // 1.0 = 0 cents (no change), 2.0 = 1200 cents (octave up), 0.5 = -1200 cents (octave down)
+      const pitchInCents = Math.round(1200 * Math.log2(pitchMultiplier));
+      console.log("Playing with pitch:", pitchMultiplier, "=", pitchInCents, "cents");
 
       if (!audioContextRef.current) {
           audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -125,10 +181,9 @@ export default function LocalTTSPage() {
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       
-      // Apply Pitch (Detune)
-      // detune value is in cents. 100 cents = 1 semitone.
+      // Apply Pitch (Detune) - value is in cents
       if (source.detune) {
-          source.detune.value = pitchToUse;
+          source.detune.value = pitchInCents;
       }
       
       source.connect(ctx.destination);
@@ -141,7 +196,7 @@ export default function LocalTTSPage() {
       if(!worker.current) return;
       
       worker.current.onmessage = (event) => {
-        const { status, file, progress, audio, sampling_rate, error, type, current, total, text: chunkText } = event.data;
+        const { status, file, progress, audio, sampling_rate, error, type, current, total, text: chunkText, chunkIndex, totalChunks, isLast } = event.data;
 
          if (status === "init") {
              if (!type) setStatus("loading");
@@ -157,9 +212,23 @@ export default function LocalTTSPage() {
                 return [...prev, { file, progress }];
             });
         } else if (status === "progress_generation") {
-            // New: Handle chunk generation progress
+            // Handle chunk generation progress
             setStatus("generating");
             setGenerationProgress({ current, total, text: chunkText });
+        } else if (status === "stream_chunk") {
+            // Chunk received - don't auto-play, just track progress
+            setModelLoaded(true);
+            
+            // Start timer on first chunk if not already running
+            if (!timerRef.current) {
+                timerRef.current = setInterval(() => {
+                    setElapsedTime(prev => prev + 1);
+                }, 1000);
+            }
+            
+            // Calculate percentage
+            const percent = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+            setGenerationProgress({ current: chunkIndex + 1, total: totalChunks, text: `${percent}%` });
         } else if (status === "generating") {
             if (!type) setStatus("generating");
             setModelLoaded(true);
@@ -170,11 +239,15 @@ export default function LocalTTSPage() {
                 setPreviewVoiceId(null);
             } else {
                 setStatus("complete");
+                // Stop timer
+                if (timerRef.current) {
+                    clearInterval(timerRef.current);
+                    timerRef.current = null;
+                }
                 const wavUrl = createWavUrl(audio, sampling_rate);
                 setAudioUrl(wavUrl);
                 setAudioData({ audio, sampling_rate }); // Store for replay
-                // Play with current user settings
-                playAudio(audio, sampling_rate);
+                // Don't auto-play - user can click Play button
                 
                 // Track Success
                 const voiceName = KOKORO_VOICES.find(v => v.id === selectedVoice)?.name || selectedVoice;
@@ -196,7 +269,19 @@ export default function LocalTTSPage() {
     if (!text) return;
     setAudioUrl(null);
     setError(null);
+    
+    // Stop any current playback and reset queue
     if (sourceNodeRef.current) sourceNodeRef.current.stop();
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    currentPlayingIndexRef.current = 0;
+    
+    // Reset timer (will start when first chunk arrives)
+    setElapsedTime(0);
+    if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+    }
     
     const voiceName = KOKORO_VOICES.find(v => v.id === selectedVoice)?.name || selectedVoice;
     trackGenerationStart(text.split(' ').length, text.length, 1, voiceName, selectedStyle.name, text);
@@ -210,7 +295,7 @@ export default function LocalTTSPage() {
 
   const handlePreview = (voiceId, e) => {
     e.stopPropagation();
-    if (previewVoiceId === voiceId) return; 
+    // Allow re-clicking to preview with new settings
     
     if (sourceNodeRef.current) sourceNodeRef.current.stop();
 
@@ -381,10 +466,10 @@ export default function LocalTTSPage() {
                             <div className="space-y-3">
                                 <label className="text-sm font-medium text-gray-300 flex justify-between items-center">
                                     <span>Speed</span>
-                                    <span className="text-green-400 font-mono bg-green-400/10 px-2 py-0.5 rounded text-xs">{speed.toFixed(1)}x</span>
+                                    <span className="text-green-400 font-mono bg-green-400/10 px-2 py-0.5 rounded text-xs">{speed.toFixed(2)}x</span>
                                 </label>
                                 <input 
-                                    type="range" min="0.5" max="2.0" step="0.1" 
+                                    type="range" min="0.50" max="2.00" step="0.01" 
                                     value={speed} onChange={(e) => setSpeed(parseFloat(e.target.value))}
                                     className="w-full accent-green-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
                                 />
@@ -392,12 +477,12 @@ export default function LocalTTSPage() {
                             {/* Pitch */}
                             <div className="space-y-3">
                                 <label className="text-sm font-medium text-gray-300 flex justify-between items-center">
-                                    <span>Pitch Shift</span>
-                                    <span className="text-purple-400 font-mono bg-purple-400/10 px-2 py-0.5 rounded text-xs">{pitch > 0 ? '+' : ''}{pitch}</span>
+                                    <span>Pitch</span>
+                                    <span className="text-purple-400 font-mono bg-purple-400/10 px-2 py-0.5 rounded text-xs">{pitch.toFixed(2)}x</span>
                                 </label>
                                 <input 
-                                    type="range" min="-600" max="600" step="50" 
-                                    value={pitch} onChange={(e) => setPitch(parseInt(e.target.value))}
+                                    type="range" min="0.50" max="2.00" step="0.01" 
+                                    value={pitch} onChange={(e) => setPitch(parseFloat(e.target.value))}
                                     className="w-full accent-purple-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
                                 />
                             </div>
@@ -471,16 +556,27 @@ export default function LocalTTSPage() {
                     <div className="flex justify-between text-xs font-medium text-gray-400">
                         <span>
                             {status === 'loading' && "Loading Model..."}
-                            {status === 'generating' && `Processing Chunk ${generationProgress.current}/${generationProgress.total}`}
+                            {status === 'generating' && "Generating Audio..."}
                         </span>
-                        <span>
-                            {status === 'loading' && progressItems.length > 0 && `${Math.round(progressItems[0].progress)}%`}
-                            {status === 'generating' && generationProgress.total > 0 && `${Math.round((generationProgress.current / generationProgress.total) * 100)}%`}
+                        <span className="flex items-center gap-3">
+                            {status === 'loading' && progressItems.length > 0 && `${Math.round(progressItems[0].progress || 0)}%`}
+                            {status === 'loading' && progressItems.length === 0 && ''}
+                            {status === 'generating' && (
+                                <>
+                                    <span className="text-indigo-400 font-mono">
+                                        {generationProgress.total > 0 ? `${Math.round((generationProgress.current / generationProgress.total) * 100)}%` : '0%'}
+                                    </span>
+                                    <span className="text-gray-500">|</span>
+                                    <span className="text-emerald-400 font-mono">
+                                        ⏱ {Math.floor(elapsedTime / 60).toString().padStart(2, '0')}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                                    </span>
+                                </>
+                            )}
                         </span>
                     </div>
-                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-3 bg-white/5 rounded-full overflow-hidden">
                         <div 
-                            className="h-full bg-linear-to-r from-indigo-500 to-purple-500 transition-all duration-300"
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 rounded-full"
                             style={{ 
                                 width: status === 'loading' 
                                     ? `${progressItems.length > 0 ? progressItems[0].progress : 0}%` 
@@ -488,9 +584,9 @@ export default function LocalTTSPage() {
                             }}
                         />
                     </div>
-                    {status === 'generating' && (
-                        <p className="text-[10px] text-gray-600 truncate font-mono">
-                            {generationProgress.text}
+                    {status === 'generating' && generationProgress.total > 0 && (
+                        <p className="text-[11px] text-gray-500 font-mono text-center">
+                            Chunk {generationProgress.current} of {generationProgress.total}
                         </p>
                     )}
                 </div>
@@ -539,19 +635,67 @@ export default function LocalTTSPage() {
                         </div>
                         
                         <div className="flex gap-3">
+                        {/* Play/Pause Button */}
                         <button
-                            onClick={() => audioData && playAudio(audioData.audio, audioData.sampling_rate)}
+                            onClick={() => {
+                                if (playbackState === 'playing') {
+                                    // Pause
+                                    if (audioContextRef.current) {
+                                        audioContextRef.current.suspend();
+                                        setPlaybackState('paused');
+                                    }
+                                } else if (playbackState === 'paused') {
+                                    // Resume
+                                    if (audioContextRef.current) {
+                                        audioContextRef.current.resume();
+                                        setPlaybackState('playing');
+                                    }
+                                } else {
+                                    // Play from start
+                                    if (audioData) {
+                                        playAudio(audioData.audio, audioData.sampling_rate);
+                                        setPlaybackState('playing');
+                                        // Set up ended handler
+                                        if (sourceNodeRef.current) {
+                                            sourceNodeRef.current.onended = () => setPlaybackState('stopped');
+                                        }
+                                    }
+                                }
+                            }}
                             className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                         >
-                            <Play className="w-4 h-4" /> Play (Apply FX)
+                            {playbackState === 'playing' ? (
+                                <><Pause className="w-4 h-4" /> Pause</>
+                            ) : playbackState === 'paused' ? (
+                                <><Play className="w-4 h-4" /> Resume</>
+                            ) : (
+                                <><Play className="w-4 h-4" /> Play</>
+                            )}
                         </button>
+                        
+                        {/* Stop Button */}
+                        <button
+                            onClick={() => {
+                                if (sourceNodeRef.current) {
+                                    sourceNodeRef.current.stop();
+                                    sourceNodeRef.current.disconnect();
+                                }
+                                setPlaybackState('stopped');
+                            }}
+                            disabled={playbackState === 'stopped'}
+                            className="py-3 px-4 bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <StopCircle className="w-4 h-4" /> Stop
+                        </button>
+                        
+                        {/* Download Button */}
                         <a 
                             href={audioUrl} 
                             download={`kokoro_${selectedVoice}.wav`}
                             onClick={() => trackDownload(KOKORO_VOICES.find(v => v.id === selectedVoice)?.name, "Local WAV", text.split(' ').length)}
                             className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                         >
-                            <Download className="w-4 h-4" /> Download WAV
+                            <Download className="w-4 h-4" /> Download
                         </a>
                         </div>
                 </div>
