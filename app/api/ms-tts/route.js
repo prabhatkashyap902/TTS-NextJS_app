@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { UniversalEdgeTTS } from "edge-tts-universal";
+import { UniversalEdgeTTS } from "../../lib/edge-tts";
 import Mixpanel from "mixpanel";
 
 export const maxDuration = 120;
