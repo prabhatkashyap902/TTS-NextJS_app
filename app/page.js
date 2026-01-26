@@ -208,22 +208,24 @@ export default function TTSPage() {
       { type: 'audio/mpeg' }
     );
     
-    // Calculate duration from SRT's last timestamp
-    let duration = 0;
-    if (data.srt) {
-      const blocks = data.srt.trim().split(/\n\n+/);
-      const lastBlock = blocks[blocks.length - 1];
-      if (lastBlock) {
-        const lines = lastBlock.split('\n');
-        if (lines.length >= 2) {
-          const timeMatch = lines[1].match(/\d{2}:\d{2}:\d{2},\d{3} --> (\d{2}):(\d{2}):(\d{2}),(\d{3})/);
-          if (timeMatch) {
-            const [, h, m, s, ms] = timeMatch;
-            duration = parseInt(h) * 3600000 + parseInt(m) * 60000 + parseInt(s) * 1000 + parseInt(ms);
-          }
-        }
-      }
-    }
+    // Calculate accurate duration from the audio blob itself
+    // This includes trailing silence/pauses which SRT timestamps often miss
+    const getAudioDuration = (blob) => {
+      return new Promise((resolve) => {
+        const audio = new Audio(URL.createObjectURL(blob));
+        audio.onloadedmetadata = () => {
+          URL.revokeObjectURL(audio.src);
+          // Return duration in milliseconds
+          resolve(audio.duration * 1000);
+        };
+        audio.onerror = () => resolve(0);
+        // Force metadata load
+        audio.preload = 'metadata';
+      });
+    };
+    
+    // Get true duration
+    const duration = await getAudioDuration(audioBlob);
     
     return { audioBlob, srt: data.srt, duration };
   };
