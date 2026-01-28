@@ -153,12 +153,9 @@ export default function SubtitlesPage() {
   return (
     <div className="app-container">
       <div className="main-content">
-        <header className="header">
+        <header className="header" style={{ textAlign: "center" }}>
           <h1 className="title">🎙️ Audio to Subtitles</h1>
           <p className="subtitle">Upload Audio/Video • Local AI Transcription (Whisper) • 100% Free</p>
-          <a href="/" className="back-link" onClick={() => trackClick('Back to TTS')} style={{marginTop: "1rem", display: "inline-block", color: "var(--primary)", textDecoration: "none"}}>
-            ← Back to TTS
-          </a>
         </header>
 
         <div className="form-container">

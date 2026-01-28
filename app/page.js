@@ -417,49 +417,7 @@ export default function TTSPage() {
   return (
     <div className="app-container">
       <div className="main-content">
-        <header className="header">
-          {/* Buy me a chai button - positioned at top on desktop, after header on mobile */}
-          <a 
-            href="https://buymeachai.ezee.li/noobdev007" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            onClick={() => trackSupportClick()}
-            className="support-btn"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.5rem 1rem",
-              background: "rgba(255, 255, 255, 0.95)",
-              border: "1px solid rgba(99, 130, 255, 0.4)",
-              borderRadius: "12px",
-              textDecoration: "none",
-              transition: "all 0.3s ease",
-              cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(99, 130, 255, 0.15)",
-              marginBottom: "1rem",
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "rgba(240, 245, 255, 1)";
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 4px 15px rgba(99, 130, 255, 0.25)";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.95)";
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 2px 8px rgba(99, 130, 255, 0.15)";
-            }}
-          >
-            <span style={{ fontSize: "1.1rem" }}>☕</span>
-            <span style={{ 
-              fontFamily: "var(--font-pacifico), 'Pacifico', cursive", 
-              fontSize: "0.9rem", 
-              color: "#6b8aff",
-              fontWeight: "400",
-            }}>
-              Buy me a chai
-            </span>
-          </a>
+        <header className="header" style={{ marginBottom: "2rem", textAlign: "center" }}>
           
           <h1 className="title">🎙️ Neural TTS</h1>
           <p className="subtitle">Premium Neural Voices • Style Presets • Unlimited • FREE</p>
@@ -525,45 +483,6 @@ export default function TTSPage() {
               <span style={{ fontSize: "0.85rem", fontWeight: "600" }}>198</span>
             </div>
           </button>
-          <a 
-            href="/subtitles" 
-            style={{
-              marginTop: "0.75rem",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              padding: "0.4rem 0.8rem",
-              background: "rgba(99, 102, 241, 0.1)",
-              border: "1px solid rgba(99, 102, 241, 0.3)",
-              borderRadius: "20px",
-              textDecoration: "none",
-              fontSize: "0.75rem",
-              color: "var(--primary)",
-              transition: "all 0.2s ease",
-            }}
-          >
-            📝 Get Subtitles Only
-          </a>
-          <a 
-            href="/local-tts" 
-            style={{
-              marginTop: "0.75rem",
-              marginLeft: "0.5rem",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              padding: "0.4rem 0.8rem",
-              background: "rgba(34, 197, 94, 0.1)",
-              border: "1px solid rgba(34, 197, 94, 0.3)",
-              borderRadius: "20px",
-              textDecoration: "none",
-              fontSize: "0.75rem",
-              color: "#22c55e",
-              transition: "all 0.2s ease",
-            }}
-          >
-            💻 Local TTS (Beta)
-          </a>
         </header>
 
         <div className="form-container">
@@ -833,6 +752,50 @@ export default function TTSPage() {
             <p style={{ color: "#6b7280" }}>Fine-tune your audio with precise controls for Speed (Rate) and Pitch. Create unique character voices for your projects.</p>
           </div>
         </div>
+
+        <section style={{ marginBottom: "3rem" }}>
+          <h2 style={{ fontSize: "1.8rem", fontWeight: "700", color: "#111827", marginBottom: "1.5rem" }}>
+            How to Use Text to Speech
+          </h2>
+          <ol style={{ listStyle: "decimal", paddingLeft: "1.5rem", color: "#4b5563", fontSize: "1.05rem", lineHeight: "1.8" }}>
+            <li style={{ marginBottom: "0.5rem" }}>
+              <strong style={{ color: "#4f46e5" }}>Select a Voice:</strong> Choose from over 47 premium neural voices. Filter by style (News, Narrator, Casual) to find the perfect match.
+            </li>
+            <li style={{ marginBottom: "0.5rem" }}>
+              <strong style={{ color: "#4f46e5" }}>Enter Text:</strong> Paste or type your text into the input box. Our smart chunking handles unlimited characters.
+            </li>
+            <li style={{ marginBottom: "0.5rem" }}>
+              <strong style={{ color: "#4f46e5" }}>Customize (Optional):</strong> Adjust speed and pitch, or pick a preset style like "Slow Narrator" for audiobooks.
+            </li>
+            <li style={{ marginBottom: "0.5rem" }}>
+              <strong style={{ color: "#4f46e5" }}>Generate & Download:</strong> Click "Generate" to create your audio instantly. Listen to the preview and download the MP3 file for free.
+            </li>
+          </ol>
+        </section>
+
+        <section style={{ marginBottom: "3rem" }}>
+          <h2 style={{ fontSize: "1.8rem", fontWeight: "700", color: "#111827", marginBottom: "1.5rem" }}>
+            Popular Use Cases
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+            <div style={{ padding: "1rem", borderLeft: "4px solid #4f46e5", background: "#f9fafb" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: "600", color: "#1f2937", marginBottom: "0.5rem" }}>📺 YouTube Videos</h3>
+              <p style={{ fontSize: "0.95rem", color: "#4b5563" }}>Create professional voiceovers for faceless channels, tutorials, and explainer videos without expensive equipment.</p>
+            </div>
+            <div style={{ padding: "1rem", borderLeft: "4px solid #22c55e", background: "#f9fafb" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: "600", color: "#1f2937", marginBottom: "0.5rem" }}>📚 Audiobooks & Learning</h3>
+              <p style={{ fontSize: "0.95rem", color: "#4b5563" }}>Convert study notes, articles, or e-books into audio to listen while commuting or for accessibility.</p>
+            </div>
+            <div style={{ padding: "1rem", borderLeft: "4px solid #f59e0b", background: "#f9fafb" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: "600", color: "#1f2937", marginBottom: "0.5rem" }}>🎙️ Podcasts & Intros</h3>
+              <p style={{ fontSize: "0.95rem", color: "#4b5563" }}>Generate consistent intro/outro segments or experiment with podcast ideas before recording.</p>
+            </div>
+            <div style={{ padding: "1rem", borderLeft: "4px solid #ef4444", background: "#f9fafb" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: "600", color: "#1f2937", marginBottom: "0.5rem" }}>💼 Presentations</h3>
+              <p style={{ fontSize: "0.95rem", color: "#4b5563" }}>Add clear, professional narration to PowerPoint slides or corporate training videos.</p>
+            </div>
+          </div>
+        </section>
 
         <section>
           <h2 style={{ fontSize: "1.8rem", fontWeight: "700", color: "#111827", marginBottom: "1.5rem" }}>

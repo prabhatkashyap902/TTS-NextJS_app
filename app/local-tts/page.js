@@ -365,7 +365,7 @@ export default function LocalTTSPage() {
       
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="space-y-4 text-center">
+        <div className="space-y-4 text-center mb-8">
             <h1 className="text-4xl font-bold bg-linear-to-r from-green-400 to-blue-500 bg-clip-text text-transparent inline-flex items-center gap-3">
                 <Cpu className="w-10 h-10 text-green-400" />
                 Local TTS
@@ -576,7 +576,7 @@ export default function LocalTTSPage() {
                     </div>
                     <div className="h-3 bg-white/5 rounded-full overflow-hidden">
                         <div 
-                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 rounded-full"
+                            className="h-full bg-linear-to-r from-indigo-500 to-purple-500 transition-all duration-300 rounded-full"
                             style={{ 
                                 width: status === 'loading' 
                                     ? `${progressItems.length > 0 ? progressItems[0].progress : 0}%` 

@@ -39,6 +39,7 @@ export const metadata = {
   },
 };
 
+import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 
 export default function RootLayout({ children }) {
@@ -53,8 +54,9 @@ export default function RootLayout({ children }) {
         ></script>
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased pt-24!`}
       >
+        <Navbar />
         {children}
         <Footer />
       </body>
