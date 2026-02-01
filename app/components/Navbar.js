@@ -34,6 +34,16 @@ export default function Navbar() {
           Local TTS
         </Link>
         <Link 
+          href="/cloud-tts" 
+          className={`text-sm font-medium transition-colors ${
+            isActive("/cloud-tts") 
+              ? "text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-full" 
+              : "text-gray-400 hover:text-blue-400"
+          }`}
+        >
+          Cloud TTS
+        </Link>
+        <Link 
           href="/subtitles" 
           className={`text-sm font-medium transition-colors ${
             isActive("/subtitles") 
