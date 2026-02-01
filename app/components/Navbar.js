@@ -44,6 +44,16 @@ export default function Navbar() {
           Cloud TTS
         </Link>
         <Link 
+          href="/qwen-tts" 
+          className={`text-sm font-medium transition-colors ${
+            isActive("/qwen-tts") 
+              ? "text-purple-400 bg-purple-500/10 px-3 py-1.5 rounded-full" 
+              : "text-gray-400 hover:text-purple-400"
+          }`}
+        >
+          Qwen3 TTS
+        </Link>
+        <Link 
           href="/subtitles" 
           className={`text-sm font-medium transition-colors ${
             isActive("/subtitles") 
