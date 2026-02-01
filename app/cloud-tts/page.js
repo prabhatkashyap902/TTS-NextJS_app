@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Play, Download, Loader2, Cloud, Settings, Pause, StopCircle, RefreshCw, Wifi, WifiOff, Copy, Check } from "lucide-react";
+import { Play, Download, Loader2, Cloud, Settings, Pause, StopCircle, RefreshCw, Wifi, WifiOff, Copy, Check, ExternalLink } from "lucide-react";
 import {
   initMixpanel,
   trackPageView,
@@ -456,14 +456,75 @@ export default function CloudTTSPage() {
           </div>
           
           {!isConnected && (
-            <div className="mt-4 p-4 bg-yellow-500/10 rounded-xl border border-yellow-500/20 text-yellow-400 text-sm">
-              <p className="font-medium mb-2">📋 How to connect:</p>
-              <ol className="list-decimal list-inside space-y-1 text-yellow-400/80">
-                <li>Open the Colab notebook from <code className="bg-yellow-500/20 px-1.5 py-0.5 rounded">/public/kokoro_colab_api.ipynb</code></li>
-                <li>Run all cells (make sure to select T4 GPU runtime)</li>
-                <li>Copy the ngrok URL printed at the end</li>
-                <li>Paste it above and click Connect</li>
-              </ol>
+            <div className="mt-6 space-y-4">
+              <p className="font-bold text-lg text-white">🚀 Setup Guide</p>
+              
+              {/* Step 1: Download */}
+              <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">1</div>
+                  <div className="flex-1">
+                    <p className="font-medium text-blue-300 mb-2">Download the Colab Notebook</p>
+                    <a 
+                      href="/kokoro_colab_api_5.ipynb" 
+                      download="kokoro_colab_api_5.ipynb"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-sm font-medium transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download kokoro_colab_api_5.ipynb
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Get ngrok token */}
+              <div className="p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">2</div>
+                  <div className="flex-1">
+                    <p className="font-medium text-purple-300 mb-2">Get your free ngrok Auth Token</p>
+                    <p className="text-gray-400 text-sm mb-2">Sign up for free and copy your authtoken:</p>
+                    <a 
+                      href="https://dashboard.ngrok.com/get-started/your-authtoken" 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-white text-sm font-medium transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Get ngrok Token
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Upload and Run */}
+              <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">3</div>
+                  <div className="flex-1">
+                    <p className="font-medium text-green-300 mb-2">Upload to Google Colab & Run</p>
+                    <ol className="text-gray-400 text-sm space-y-1 list-decimal list-inside">
+                      <li>Go to <a href="https://colab.research.google.com" target="_blank" rel="noopener noreferrer" className="text-green-400 underline">colab.research.google.com</a></li>
+                      <li>File → Upload notebook → Select the downloaded file</li>
+                      <li>Runtime → Change runtime type → Select <strong className="text-green-300">T4 GPU</strong></li>
+                      <li>Paste your ngrok token in Cell 4</li>
+                      <li>Run all cells (Ctrl+F9)</li>
+                      <li>Wait for the ngrok URL to appear at the end</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 4: Connect */}
+              <div className="p-4 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">4</div>
+                  <div className="flex-1">
+                    <p className="font-medium text-cyan-300 mb-2">Paste the ngrok URL above & Connect!</p>
+                    <p className="text-gray-400 text-sm">Copy the URL that looks like <code className="bg-cyan-500/20 px-1.5 py-0.5 rounded text-cyan-300">https://xxxx-xxxx.ngrok-free.app</code> and paste it in the box above, then click Connect.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
