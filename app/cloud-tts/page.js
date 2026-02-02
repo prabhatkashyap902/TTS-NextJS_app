@@ -59,6 +59,7 @@ export default function CloudTTSPage() {
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [gpuInfo, setGpuInfo] = useState("");
   const [urlCopied, setUrlCopied] = useState(false);
+  const [setupPlatform, setSetupPlatform] = useState("colab"); // "colab" or "kaggle"
   
   const [text, setText] = useState("Hello! I am running on Google Colab using a free T4 GPU. No local resources needed.");
   const [selectedVoice, setSelectedVoice] = useState(KOKORO_VOICES[9].id); // Default to Adam
@@ -457,71 +458,160 @@ export default function CloudTTSPage() {
           
           {!isConnected && (
             <div className="mt-6 space-y-4">
-              <p className="font-bold text-lg text-white">🚀 Setup Guide</p>
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-lg text-white">🚀 Setup Guide</p>
+                
+                {/* Platform Tabs */}
+                <div className="flex bg-black/30 rounded-lg p-1">
+                  <button
+                    onClick={() => setSetupPlatform("colab")}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      setupPlatform === "colab" 
+                        ? "bg-blue-600 text-white" 
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    Google Colab
+                  </button>
+                  <button
+                    onClick={() => setSetupPlatform("kaggle")}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      setupPlatform === "kaggle" 
+                        ? "bg-orange-600 text-white" 
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    Kaggle
+                  </button>
+                </div>
+              </div>
               
-              {/* Step 1: Download */}
-              <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">1</div>
-                  <div className="flex-1">
-                    <p className="font-medium text-blue-300 mb-2">Download the Colab Notebook</p>
-                    <a 
-                      href="/kokoro_colab_api_5.ipynb" 
-                      download="kokoro_colab_api_5.ipynb"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-sm font-medium transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download kokoro_colab_api_5.ipynb
-                    </a>
+              {/* Colab Instructions */}
+              {setupPlatform === "colab" && (
+                <>
+                  {/* Step 1: Download */}
+                  <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">1</div>
+                      <div className="flex-1">
+                        <p className="font-medium text-blue-300 mb-2">Download the Colab Notebook</p>
+                        <a 
+                          href="/kokoro_colab_api_5.ipynb" 
+                          download="kokoro_colab_api_5.ipynb"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-sm font-medium transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download kokoro_colab_api_5.ipynb
+                        </a>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Step 2: Get ngrok token */}
-              <div className="p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">2</div>
-                  <div className="flex-1">
-                    <p className="font-medium text-purple-300 mb-2">Get your free ngrok Auth Token</p>
-                    <p className="text-gray-400 text-sm mb-2">Sign up for free and copy your authtoken:</p>
-                    <a 
-                      href="https://dashboard.ngrok.com/get-started/your-authtoken" 
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-white text-sm font-medium transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Get ngrok Token
-                    </a>
+                  {/* Step 2: Get ngrok token */}
+                  <div className="p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">2</div>
+                      <div className="flex-1">
+                        <p className="font-medium text-purple-300 mb-2">Get your free ngrok Auth Token</p>
+                        <a 
+                          href="https://dashboard.ngrok.com/get-started/your-authtoken" 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-white text-sm font-medium transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Get ngrok Token
+                        </a>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Step 3: Upload and Run */}
-              <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">3</div>
-                  <div className="flex-1">
-                    <p className="font-medium text-green-300 mb-2">Upload to Google Colab & Run</p>
-                    <ol className="text-gray-400 text-sm space-y-1 list-decimal list-inside">
-                      <li>Go to <a href="https://colab.research.google.com" target="_blank" rel="noopener noreferrer" className="text-green-400 underline">colab.research.google.com</a></li>
-                      <li>File → Upload notebook → Select the downloaded file</li>
-                      <li>Runtime → Change runtime type → Select <strong className="text-green-300">T4 GPU</strong></li>
-                      <li>Paste your ngrok token in Cell 4</li>
-                      <li>Run all cells (Ctrl+F9)</li>
-                      <li>Wait for the ngrok URL to appear at the end</li>
-                    </ol>
+                  {/* Step 3: Upload and Run */}
+                  <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">3</div>
+                      <div className="flex-1">
+                        <p className="font-medium text-green-300 mb-2">Upload to Google Colab & Run</p>
+                        <ol className="text-gray-400 text-sm space-y-1 list-decimal list-inside">
+                          <li>Go to <a href="https://colab.research.google.com" target="_blank" rel="noopener noreferrer" className="text-green-400 underline">colab.research.google.com</a></li>
+                          <li>File → Upload notebook → Select the downloaded file</li>
+                          <li>Runtime → Change runtime type → Select <strong className="text-green-300">T4 GPU</strong></li>
+                          <li>Paste your ngrok token in Cell 4</li>
+                          <li>Run all cells (Ctrl+F9)</li>
+                        </ol>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
 
-              {/* Step 4: Connect */}
-              <div className="p-4 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+              {/* Kaggle Instructions */}
+              {setupPlatform === "kaggle" && (
+                <>
+                  {/* Step 1: Download */}
+                  <div className="p-4 bg-orange-500/10 rounded-xl border border-orange-500/20">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">1</div>
+                      <div className="flex-1">
+                        <p className="font-medium text-orange-300 mb-2">Download the Kaggle Notebook</p>
+                        <a 
+                          href="/kokoro_kaggle.ipynb" 
+                          download="kokoro_kaggle.ipynb"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white text-sm font-medium transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download kokoro_kaggle.ipynb
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Get ngrok token */}
+                  <div className="p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">2</div>
+                      <div className="flex-1">
+                        <p className="font-medium text-purple-300 mb-2">Get your free ngrok Auth Token</p>
+                        <a 
+                          href="https://dashboard.ngrok.com/get-started/your-authtoken" 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-white text-sm font-medium transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Get ngrok Token
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Kaggle Setup */}
+                  <div className="p-4 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">3</div>
+                      <div className="flex-1">
+                        <p className="font-medium text-cyan-300 mb-2">Upload to Kaggle & Configure</p>
+                        <ol className="text-gray-400 text-sm space-y-1 list-decimal list-inside">
+                          <li>Go to <a href="https://kaggle.com/notebooks" target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline">kaggle.com</a> → Create → New Notebook</li>
+                          <li>File → Import Notebook → Upload the downloaded file</li>
+                          <li><strong className="text-yellow-300">⚠️ Verify phone</strong> in Settings for GPU access</li>
+                          <li>Right sidebar → Settings → <strong className="text-cyan-300">Internet: ON</strong></li>
+                          <li>Right sidebar → Settings → <strong className="text-cyan-300">Accelerator: GPU T4 x2</strong></li>
+                          <li>Edit ngrok token in Cell 3, then run cells with Shift+Enter</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Step 4: Connect - shared */}
+              <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">4</div>
+                  <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">4</div>
                   <div className="flex-1">
-                    <p className="font-medium text-cyan-300 mb-2">Paste the ngrok URL above & Connect!</p>
-                    <p className="text-gray-400 text-sm">Copy the URL that looks like <code className="bg-cyan-500/20 px-1.5 py-0.5 rounded text-cyan-300">https://xxxx-xxxx.ngrok-free.app</code> and paste it in the box above, then click Connect.</p>
+                    <p className="font-medium text-emerald-300 mb-2">Paste the ngrok URL above & Connect!</p>
+                    <p className="text-gray-400 text-sm">Copy the URL that looks like <code className="bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-300">https://xxxx-xxxx.ngrok-free.app</code> and paste it in the box above, then click Connect.</p>
                   </div>
                 </div>
               </div>

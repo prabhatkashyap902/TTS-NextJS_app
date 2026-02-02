@@ -54,6 +54,16 @@ export default function Navbar() {
           Qwen3 TTS
         </Link>
         <Link 
+          href="/xtts" 
+          className={`text-sm font-medium transition-colors ${
+            isActive("/xtts") 
+              ? "text-orange-400 bg-orange-500/10 px-3 py-1.5 rounded-full" 
+              : "text-gray-400 hover:text-orange-400"
+          }`}
+        >
+          XTTSv2
+        </Link>
+        <Link 
           href="/subtitles" 
           className={`text-sm font-medium transition-colors ${
             isActive("/subtitles") 
