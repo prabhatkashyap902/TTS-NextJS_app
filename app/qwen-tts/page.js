@@ -69,7 +69,7 @@ export default function Qwen3TTSPage() {
       const response = await fetch(`${cleanUrl}/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000),
-        headers: { 'ngrok-skip-browser-warning': 'true' },
+        headers: { 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' },
       });
       
       if (response.ok) {
@@ -167,6 +167,7 @@ export default function Qwen3TTSPage() {
         headers: { 
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
+          'bypass-tunnel-reminder': 'true',
         },
         body: JSON.stringify({
           text,
@@ -447,12 +448,12 @@ export default function Qwen3TTSPage() {
                       <div className="flex-1">
                         <p className="font-medium text-orange-300 mb-2">Download the Kaggle Notebook</p>
                         <a 
-                          href="/qwen3_tts_kaggle.ipynb" 
-                          download="qwen3_tts_kaggle.ipynb"
+                          href="/qwen3_tts_kaggle_2.ipynb" 
+                          download="qwen3_tts_kaggle_2.ipynb"
                           className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white text-sm font-medium transition-colors"
                         >
                           <Download className="w-4 h-4" />
-                          Download qwen3_tts_kaggle.ipynb
+                          Download qwen3_tts_kaggle_2.ipynb
                         </a>
                       </div>
                     </div>
@@ -600,17 +601,16 @@ export default function Qwen3TTSPage() {
           {/* Text Input */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-gray-400 uppercase tracking-wider ml-1">
-              Text <span className={`text-xs normal-case ml-2 ${text.length >= 2000 ? 'text-red-400' : 'text-gray-600'}`}>{text.length.toLocaleString()} / 2,000 chars</span>
+              Text <span className="text-xs normal-case ml-2 text-gray-600">{text.length.toLocaleString()} chars {text.length > 2000 && `(~${Math.ceil(text.length / 2000)} chunks)`}</span>
             </label>
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value.slice(0, 2000))}
-              maxLength={2000}
-              className={`w-full bg-black/40 border rounded-xl p-6 text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 min-h-[200px] resize-y placeholder:text-gray-700 leading-relaxed text-lg ${text.length >= 2000 ? 'border-red-500/50' : 'border-white/10'}`}
-              placeholder="Enter text to synthesize (max 2,000 chars)..."
+              onChange={(e) => setText(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-xl p-6 text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 min-h-[200px] resize-y placeholder:text-gray-700 leading-relaxed text-lg"
+              placeholder="Enter text to synthesize (unlimited - auto-chunked)..."
             />
-            {text.length >= 2000 && (
-              <p className="text-red-400 text-xs">⚠️ Character limit reached. For longer texts, use XTTSv2 (faster).</p>
+            {text.length > 2000 && (
+              <p className="text-purple-400 text-xs">ℹ️ Long text will be split into ~{Math.ceil(text.length / 2000)} chunks of 2K chars each.</p>
             )}
           </div>
 

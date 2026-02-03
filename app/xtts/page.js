@@ -68,7 +68,7 @@ export default function XTTSPage() {
       const response = await fetch(`${cleanUrl}/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000),
-        headers: { 'ngrok-skip-browser-warning': 'true' },
+        headers: { 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' },
       });
       
       if (response.ok) {
@@ -155,7 +155,7 @@ export default function XTTSPage() {
       
       const response = await fetch(`${colabUrl}/api/tts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' },
         body: JSON.stringify({ text, language, ref_audio: refAudioB64, stream: true }),
       });
       

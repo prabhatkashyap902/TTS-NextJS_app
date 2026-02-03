@@ -117,6 +117,7 @@ export default function CloudTTSPage() {
         signal: AbortSignal.timeout(5000),
         headers: {
           'ngrok-skip-browser-warning': 'true',
+          'bypass-tunnel-reminder': 'true',
         },
       });
       
@@ -164,6 +165,7 @@ export default function CloudTTSPage() {
         headers: { 
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
+          'bypass-tunnel-reminder': 'true',
         },
         body: JSON.stringify({
           text,
@@ -286,6 +288,7 @@ export default function CloudTTSPage() {
         headers: { 
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
+          'bypass-tunnel-reminder': 'true',
         },
         body: JSON.stringify({
           text: previewText,
@@ -555,12 +558,12 @@ export default function CloudTTSPage() {
                       <div className="flex-1">
                         <p className="font-medium text-orange-300 mb-2">Download the Kaggle Notebook</p>
                         <a 
-                          href="/kokoro_kaggle.ipynb" 
-                          download="kokoro_kaggle.ipynb"
+                          href="/kokoro_kaggle_2.ipynb" 
+                          download="kokoro_kaggle_2.ipynb"
                           className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white text-sm font-medium transition-colors"
                         >
                           <Download className="w-4 h-4" />
-                          Download kokoro_kaggle.ipynb
+                          Download kokoro_kaggle_2.ipynb
                         </a>
                       </div>
                     </div>
