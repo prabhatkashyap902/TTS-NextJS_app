@@ -117,7 +117,6 @@ export default function CloudTTSPage() {
         signal: AbortSignal.timeout(5000),
         headers: {
           'ngrok-skip-browser-warning': 'true',
-          'bypass-tunnel-reminder': 'true',
         },
       });
       
@@ -165,7 +164,6 @@ export default function CloudTTSPage() {
         headers: { 
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
-          'bypass-tunnel-reminder': 'true',
         },
         body: JSON.stringify({
           text,
@@ -288,7 +286,6 @@ export default function CloudTTSPage() {
         headers: { 
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
-          'bypass-tunnel-reminder': 'true',
         },
         body: JSON.stringify({
           text: previewText,
