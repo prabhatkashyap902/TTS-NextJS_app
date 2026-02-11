@@ -50,6 +50,7 @@ export default function Qwen3TTSPage() {
   // Playback
   const [playbackState, setPlaybackState] = useState('stopped');
   const audioRef = useRef(null);
+  const pingIntervalRef = useRef(null);
 
   useEffect(() => {
     // Auto-connect if URL is in localStorage
@@ -58,6 +59,13 @@ export default function Qwen3TTSPage() {
       setColabUrl(savedUrl);
       checkConnection(savedUrl);
     }
+    
+    // Cleanup ping interval on unmount
+    return () => {
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
+    };
   }, []);
 
   const checkConnection = async (url) => {
@@ -78,14 +86,37 @@ export default function Qwen3TTSPage() {
         setGpuInfo(data.gpu || 'Connected');
         setColabUrl(cleanUrl);
         localStorage.setItem('qwen3_colab_url', cleanUrl);
+        
+        // Start keep-alive ping every 30 seconds to prevent ngrok disconnect
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+        }
+        pingIntervalRef.current = setInterval(async () => {
+          try {
+            await fetch(`${cleanUrl}/health`, {
+              method: 'GET',
+              signal: AbortSignal.timeout(5000),
+              headers: { 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' },
+            });
+            console.log('🔄 Keep-alive ping sent');
+          } catch (e) {
+            console.warn('Keep-alive ping failed:', e.message);
+          }
+        }, 30000); // Every 30 seconds
       } else {
         setIsConnected(false);
         setGpuInfo("");
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+        }
       }
     } catch (e) {
       console.error("Connection check failed:", e);
       setIsConnected(false);
       setGpuInfo("");
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
     }
     setIsCheckingConnection(false);
   };
@@ -448,12 +479,12 @@ export default function Qwen3TTSPage() {
                       <div className="flex-1">
                         <p className="font-medium text-orange-300 mb-2">Download the Kaggle Notebook</p>
                         <a 
-                          href="/qwen3_tts_kaggle_2.ipynb" 
-                          download="qwen3_tts_kaggle_2.ipynb"
+                          href="/qwen3_tts_kaggle_5.ipynb" 
+                          download="qwen3_tts_kaggle_5.ipynb"
                           className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white text-sm font-medium transition-colors"
                         >
                           <Download className="w-4 h-4" />
-                          Download qwen3_tts_kaggle_2.ipynb
+                          Download qwen3_tts_kaggle_5.ipynb
                         </a>
                       </div>
                     </div>
@@ -601,17 +632,14 @@ export default function Qwen3TTSPage() {
           {/* Text Input */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-gray-400 uppercase tracking-wider ml-1">
-              Text <span className="text-xs normal-case ml-2 text-gray-600">{text.length.toLocaleString()} chars {text.length > 2000 && `(~${Math.ceil(text.length / 2000)} chunks)`}</span>
+              Text <span className="text-xs normal-case ml-2 text-gray-600">{text.length.toLocaleString()} chars</span>
             </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-xl p-6 text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 min-h-[200px] resize-y placeholder:text-gray-700 leading-relaxed text-lg"
-              placeholder="Enter text to synthesize (unlimited - auto-chunked)..."
+              placeholder="Enter text to synthesize (unlimited characters)..."
             />
-            {text.length > 2000 && (
-              <p className="text-purple-400 text-xs">ℹ️ Long text will be split into ~{Math.ceil(text.length / 2000)} chunks of 2K chars each.</p>
-            )}
           </div>
 
           {/* Progress */}
