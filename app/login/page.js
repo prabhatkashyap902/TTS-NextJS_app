@@ -28,6 +28,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center relative overflow-hidden font-sans">
+      {/* Top-Left Logo */}
+      <div style={{ position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 20, fontSize: "1.25rem", fontWeight: "700", background: "linear-gradient(to right, #818cf8, #a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+        🎙️ NeuralTTS
+      </div>
+
       {/* Background Gradients */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600 rounded-full mix-blend-screen filter blur-[150px] opacity-40 animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600 rounded-full mix-blend-screen filter blur-[150px] opacity-40 animate-pulse animation-delay-2000"></div>

@@ -39,8 +39,7 @@ export const metadata = {
   },
 };
 
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
+import LayoutShell from "./components/LayoutShell";
 
 export default function RootLayout({ children }) {
   return (
@@ -54,11 +53,9 @@ export default function RootLayout({ children }) {
         ></script>
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased pt-24!`}
+        className={`${geistSans.variable} ${geistMono.variable} ${pacifico.variable} antialiased`}
       >
-        <Navbar />
-        {children}
-        <Footer />
+        <LayoutShell>{children}</LayoutShell>
       </body>
     </html>
   );
