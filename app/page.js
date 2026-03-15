@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 import {
   initMixpanel,
   trackPageView,
@@ -67,6 +69,11 @@ function formatTime(seconds) {
 }
 
 export default function TTSPage() {
+  const router = useRouter();
+  const supabase = createClient();
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [text, setText] = useState("");
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState(null);
@@ -108,6 +115,31 @@ export default function TTSPage() {
     initMixpanel();
     trackPageView('TTS Home');
   }, []);
+
+  // Fetch Supabase Session
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session) {
+          setUser(session.user);
+        }
+      } catch (err) {
+        console.error("Auth error:", err);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    fetchSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
 
   useEffect(() => {
     fetch("/api/ms-tts")
@@ -362,6 +394,11 @@ export default function TTSPage() {
     a.click();
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.refresh();
+  };
+
 
   // Parse SRT content into structured entries
   const parseSrt = (srtContent) => {
@@ -483,7 +520,10 @@ export default function TTSPage() {
               <span style={{ fontSize: "0.85rem", fontWeight: "600" }}>198</span>
             </div>
           </button>
+
         </header>
+
+
 
         <div className="form-container">
           {/* Selected Voice Display */}
@@ -605,8 +645,12 @@ export default function TTSPage() {
           )}
 
           {/* Generate Button */}
-          {!isGenerating ? (
-            <button className="generate-btn" onClick={handleGenerate} disabled={!text.trim()}>
+          {!user ? (
+            <button className="generate-btn" onClick={() => router.push('/login')} style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)" }}>
+              🔒 Sign In to Generate Audio
+            </button>
+          ) : !isGenerating ? (
+            <button className="generate-btn" onClick={handleGenerate} disabled={!text.trim() || authLoading}>
               ⚡ Generate with &quot;{useCustom ? "Custom" : selectedStyle.name}&quot; style (50x Fastest)
             </button>
           ) : (

@@ -332,9 +332,9 @@ export default function XTTSPage() {
                       <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">1</div>
                       <div className="flex-1">
                         <p className="font-medium text-orange-300 mb-2">Download the Colab Notebook</p>
-                        <a href="/xtts_colab_3.ipynb" download="xtts_colab_3.ipynb" className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white text-sm font-medium">
+                        <a href="/xtts_hindi_colab_1.ipynb" download="xtts_hindi_colab_1.ipynb" className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white text-sm font-medium">
                           <Download className="w-4 h-4" />
-                          Download xtts_colab_3.ipynb
+                          Download xtts_hindi_colab_1.ipynb
                         </a>
                       </div>
                     </div>
@@ -376,11 +376,18 @@ export default function XTTSPage() {
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">1</div>
                       <div className="flex-1">
-                        <p className="font-medium text-amber-300 mb-2">Download the Kaggle Notebook</p>
-                        <a href="/xtts_kaggle.ipynb" download="xtts_kaggle.ipynb" className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-white text-sm font-medium">
-                          <Download className="w-4 h-4" />
-                          Download xtts_kaggle.ipynb
-                        </a>
+                        <p className="font-medium text-amber-300 mb-2">Download a Kaggle Notebook</p>
+                        <div className="flex flex-wrap gap-2">
+                          <a href="/xtts_kaggle.ipynb" download="xtts_kaggle.ipynb" className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-white text-sm font-medium">
+                            <Download className="w-4 h-4" />
+                            XTTSv2 (17 Languages)
+                          </a>
+                          <a href="/indicf5_kaggle.ipynb" download="indicf5_kaggle.ipynb" className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white text-sm font-medium">
+                            <Download className="w-4 h-4" />
+                            🇮🇳 IndicF5 (Hindi — Best Quality)
+                          </a>
+                        </div>
+                        <p className="text-gray-500 text-xs mt-2">For Hindi, use IndicF5 for much better quality</p>
                       </div>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Play, Download, Loader2, Cloud, Settings, Pause, StopCircle, RefreshCw, Wifi, WifiOff, Copy, Check, ExternalLink } from "lucide-react";
+import { Play, Download, Loader2, Cloud, Settings, Pause, StopCircle, RefreshCw, Wifi, WifiOff, Copy, Check, ExternalLink, XCircle, Bug, ChevronDown, ChevronUp } from "lucide-react";
 import {
   initMixpanel,
   trackPageView,
@@ -87,6 +87,12 @@ export default function CloudTTSPage() {
   const [playbackState, setPlaybackState] = useState('stopped');
   const audioRef = useRef(null);
   
+  // Abort & timeout management
+  const abortControllerRef = useRef(null);
+  const stallTimerRef = useRef(null);
+  const [debugLogs, setDebugLogs] = useState([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  
   // Web Audio API for pitch control (same as local-tts)
   const audioContextRef = useRef(null);
   const sourceNodeRef = useRef(null);
@@ -138,6 +144,40 @@ export default function CloudTTSPage() {
     setIsCheckingConnection(false);
   };
 
+  // Helper to add debug log entries
+  const addLog = (msg) => {
+    const ts = new Date().toLocaleTimeString();
+    console.log(`[CloudTTS ${ts}] ${msg}`);
+    setDebugLogs(prev => [...prev, `[${ts}] ${msg}`]);
+  };
+
+  // Reset stall timer — called each time we get data from the stream
+  const resetStallTimer = (controller, seconds = 90) => {
+    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+    stallTimerRef.current = setTimeout(() => {
+      addLog(`❌ No data received for ${seconds}s — aborting (server likely crashed or hung)`);
+      controller.abort();
+    }, seconds * 1000);
+  };
+
+  const handleCancel = () => {
+    addLog('🛑 User cancelled generation');
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setStatus('idle');
+    setProgress(0);
+    setProgressInfo('Cancelled');
+  };
+
   const handleGenerate = async () => {
     if (!text || !isConnected) return;
     
@@ -148,6 +188,18 @@ export default function CloudTTSPage() {
     setElapsedTime(0);
     setProgress(0);
     setProgressInfo('');
+    setDebugLogs([]);
+    setShowDebugPanel(false);
+    
+    // Create AbortController for cancellation & timeout
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    
+    // Overall 5-minute timeout
+    const overallTimeout = setTimeout(() => {
+      addLog('❌ 5-minute overall timeout reached — aborting request');
+      controller.abort();
+    }, 5 * 60 * 1000);
     
     // Start timer
     timerRef.current = setInterval(() => {
@@ -156,6 +208,8 @@ export default function CloudTTSPage() {
     
     const voiceName = KOKORO_VOICES.find(v => v.id === selectedVoice)?.name || selectedVoice;
     trackGenerationStart(text.split(' ').length, text.length, 1, voiceName, selectedStyle.name, text);
+    addLog(`🚀 Starting generation: voice=${selectedVoice}, speed=${speed}, text=${text.length} chars`);
+    addLog(`📡 Sending POST to ${colabUrl}/api/tts`);
     
     try {
       // Use SSE for progress streaming
@@ -171,26 +225,40 @@ export default function CloudTTSPage() {
           speed,
           stream: true, // Enable progress streaming
         }),
+        signal: controller.signal,
       });
       
+      addLog(`✅ Response received: status=${response.status}`);
+      
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Server error: ${response.status}`);
+        const errText = await response.text().catch(() => '');
+        addLog(`❌ Server error ${response.status}: ${errText.slice(0, 500)}`);
+        throw new Error(errText || `Server error: ${response.status}`);
       }
       
       // Check if response is SSE or regular blob
       const contentType = response.headers.get('content-type') || '';
-      console.log('Response content-type:', contentType);
+      addLog(`📋 Content-Type: ${contentType}`);
       
       if (contentType.includes('text/event-stream')) {
+        addLog('📨 SSE stream mode — listening for progress events...');
         // Read SSE stream
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         
+        // Start stall detection (90s with no data = stalled)
+        resetStallTimer(controller, 90);
+        
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            addLog('📨 SSE stream ended');
+            break;
+          }
+          
+          // Reset stall timer on each chunk of data
+          resetStallTimer(controller, 90);
           
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -204,7 +272,9 @@ export default function CloudTTSPage() {
                 if (data.type === 'progress') {
                   setProgress(data.percent);
                   setProgressInfo(`Chunk ${data.current}/${data.total}`);
+                  addLog(`📊 Progress: chunk ${data.current}/${data.total} (${data.percent}%)`);
                 } else if (data.type === 'complete') {
+                  addLog('✅ Received complete event — decoding audio...');
                   // Decode base64 audio
                   const binaryStr = atob(data.audio);
                   const bytes = new Uint8Array(binaryStr.length);
@@ -220,23 +290,32 @@ export default function CloudTTSPage() {
                   setAudioData(arrayBuffer);
                   setProgress(100);
                   setStatus("complete");
+                  addLog(`✅ Audio ready: ${(blob.size / 1024).toFixed(1)} KB`);
                   
                   trackGenerationSuccess(text.split(' ').length, text.length, 1, 0, voiceName, selectedStyle.name);
                 } else if (data.type === 'error') {
+                  addLog(`❌ Server error event: ${data.message}`);
                   throw new Error(data.message);
+                } else {
+                  addLog(`📨 Unknown event type: ${data.type}`);
                 }
               } catch (parseErr) {
-                console.warn('Failed to parse SSE data:', parseErr);
+                if (parseErr.message?.includes('Server error event') || parseErr.name === 'AbortError') throw parseErr;
+                addLog(`⚠️ Failed to parse SSE data: ${parseErr.message}`);
               }
             }
           }
         }
       } else {
         // Fallback: Regular blob response (old notebook version)
-        console.log('Using fallback blob mode (upgrade to kokoro_colab_api_4.ipynb for progress)');
+        addLog('📦 Blob mode (no SSE) — waiting for full response...');
         setProgressInfo('Generating... (no progress with old notebook)');
         
+        // Start stall detection for blob mode too
+        resetStallTimer(controller, 90);
+        
         const blob = await response.blob();
+        addLog(`✅ Blob received: ${(blob.size / 1024).toFixed(1)} KB`);
         const url = URL.createObjectURL(blob);
         const arrayBuffer = await blob.arrayBuffer();
         
@@ -250,18 +329,31 @@ export default function CloudTTSPage() {
       }
       
     } catch (e) {
-      console.error("Generation failed:", e);
-      setError(e.message);
+      if (e.name === 'AbortError') {
+        const msg = elapsedTime > 290 ? 'Request timed out after 5 minutes' : 'Request was cancelled or stalled';
+        addLog(`🛑 ${msg}`);
+        setError(`${msg}. Check if Kaggle notebook is still running. Open the debug log below for details.`);
+      } else {
+        addLog(`❌ Generation failed: ${e.message}`);
+        setError(e.message);
+      }
       setStatus("error");
+      setShowDebugPanel(true);
       trackGenerationError(e.message, text.split(' ').length, 1, voiceName);
       
       // Check if connection is still alive
       checkConnection(colabUrl);
     } finally {
+      clearTimeout(overallTimeout);
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      abortControllerRef.current = null;
     }
   };
 
@@ -816,28 +908,75 @@ export default function CloudTTSPage() {
                 </div>
             )}
 
-            {/* 5. Main Button */}
-            <button
-                onClick={handleGenerate}
-                disabled={status === 'generating' || !text || !isConnected}
-                className="w-full bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 text-lg transform hover:scale-[1.01] active:scale-[0.99]"
-            >
-                {status === 'generating' ? (
-                    <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Generating on GPU...
-                    </>
-                ) : (
-                    <>
-                        ☁️ Generate with "{selectedStyle.name}" style
-                    </>
-                )}
-            </button>
+            {/* 5. Main Button + Cancel */}
+            <div className="flex gap-3">
+              <button
+                  onClick={handleGenerate}
+                  disabled={status === 'generating' || !text || !isConnected}
+                  className="flex-1 bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 text-lg transform hover:scale-[1.01] active:scale-[0.99]"
+              >
+                  {status === 'generating' ? (
+                      <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Generating on GPU...
+                      </>
+                  ) : (
+                      <>
+                          ☁️ Generate with "{selectedStyle.name}" style
+                      </>
+                  )}
+              </button>
+              {status === 'generating' && (
+                <button
+                  onClick={handleCancel}
+                  className="px-6 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-lg"
+                >
+                  <XCircle className="w-5 h-5" />
+                  Cancel
+                </button>
+              )}
+            </div>
             
             {error && (
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm text-center">
-                    {error}
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium mb-1">Generation Failed</p>
+                        <p className="text-red-400/80">{error}</p>
+                        <p className="text-red-400/50 text-xs mt-2">💡 Common causes: Kaggle session expired, ngrok tunnel disconnected, GPU out of memory, or notebook cell stopped running.</p>
+                      </div>
+                    </div>
                 </div>
+            )}
+
+            {/* Debug Log Panel */}
+            {debugLogs.length > 0 && (
+              <div className="rounded-xl border border-white/10 overflow-hidden">
+                <button 
+                  onClick={() => setShowDebugPanel(!showDebugPanel)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors text-sm text-gray-400"
+                >
+                  <span className="flex items-center gap-2">
+                    <Bug className="w-4 h-4" />
+                    Debug Log ({debugLogs.length} events)
+                  </span>
+                  {showDebugPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+                {showDebugPanel && (
+                  <div className="p-4 bg-black/40 max-h-[200px] overflow-y-auto font-mono text-xs space-y-1">
+                    {debugLogs.map((log, i) => (
+                      <div key={i} className={`${
+                        log.includes('❌') || log.includes('🛑') ? 'text-red-400' :
+                        log.includes('✅') ? 'text-green-400' :
+                        log.includes('📊') ? 'text-blue-400' :
+                        log.includes('⚠️') ? 'text-yellow-400' :
+                        'text-gray-500'
+                      }`}>{log}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Results Player */}
